@@ -1,0 +1,4 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "dualScaleBoard_hx711")(type "KiCad")(uri "${KIPRJMOD}/dualScaleBoard_hx711.pretty")(options "")(descr ""))
+)
