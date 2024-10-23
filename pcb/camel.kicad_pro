@@ -48,7 +48,7 @@
         "silk_text_thickness": 0.15,
         "silk_text_upright": false,
         "zones": {
-          "min_clearance": 0.25
+          "min_clearance": 0.55
         }
       },
       "diff_pair_dimensions": [
@@ -58,12 +58,7 @@
           "width": 0.0
         }
       ],
-      "drc_exclusions": [
-        "clearance|134020000|110025553|114d6a1c-4491-4042-b586-b8da55b0149c|e4057723-2629-4832-ba0d-48688a8527ac",
-        "clearance|136510000|109927500|a5413d4d-d86a-460a-b0c1-7fd2229e9ddf|e4057723-2629-4832-ba0d-48688a8527ac",
-        "clearance|160820500|100060000|2589f80e-3571-48ae-a498-e20c58689b0d|e4057723-2629-4832-ba0d-48688a8527ac",
-        "clearance|163450000|100000000|22be2f77-5ba1-48b8-909c-50c3900d958f|e4057723-2629-4832-ba0d-48688a8527ac"
-      ],
+      "drc_exclusions": [],
       "meta": {
         "version": 2
       },
@@ -189,7 +184,12 @@
         0.25,
         0.3,
         0.35,
-        0.4
+        0.4,
+        0.5,
+        0.6,
+        0.7,
+        0.8,
+        1.0
       ],
       "tuning_pattern_settings": {
         "diff_pair_defaults": {
@@ -252,7 +252,9 @@
     "equivalence_files": []
   },
   "erc": {
-    "erc_exclusions": [],
+    "erc_exclusions": [
+      "pin_not_driven|1041400|495300|9bd19031-662d-4459-a94c-b6c54f1e5cac|00000000-0000-0000-0000-000000000000|/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0|/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0|"
+    ],
     "meta": {
       "version": 0
     },
@@ -264,7 +266,7 @@
         0,
         0,
         0,
-        1,
+        0,
         0,
         0,
         0,
@@ -278,7 +280,7 @@
         1,
         0,
         0,
-        1,
+        0,
         0,
         2,
         2,
@@ -292,7 +294,7 @@
         0,
         0,
         0,
-        1,
+        0,
         0,
         1,
         0,
@@ -306,25 +308,11 @@
         0,
         0,
         0,
-        1,
+        0,
         1,
         2,
         1,
         1,
-        2
-      ],
-      [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
-        0,
         2
       ],
       [
@@ -342,17 +330,31 @@
         2
       ],
       [
-        1,
-        1,
-        1,
-        1,
-        1,
         0,
-        1,
-        1,
-        1,
-        1,
-        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
         2
       ],
       [
@@ -362,37 +364,9 @@
         1,
         0,
         0,
-        1,
         0,
         0,
         0,
-        0,
-        2
-      ],
-      [
-        0,
-        2,
-        1,
-        2,
-        0,
-        0,
-        1,
-        0,
-        2,
-        2,
-        2,
-        2
-      ],
-      [
-        0,
-        2,
-        0,
-        1,
-        0,
-        0,
-        1,
-        0,
-        2,
         0,
         0,
         2
@@ -401,10 +375,38 @@
         0,
         2,
         1,
+        2,
+        0,
+        0,
+        0,
+        0,
+        2,
+        2,
+        2,
+        2
+      ],
+      [
+        0,
+        2,
+        0,
         1,
         0,
         0,
+        0,
+        0,
+        2,
+        0,
+        0,
+        2
+      ],
+      [
+        0,
+        2,
         1,
+        1,
+        0,
+        0,
+        0,
         0,
         2,
         0,
@@ -436,7 +438,7 @@
       "different_unit_net": "error",
       "duplicate_reference": "error",
       "duplicate_sheet_names": "error",
-      "endpoint_off_grid": "warning",
+      "endpoint_off_grid": "ignore",
       "extra_units": "error",
       "global_label_dangling": "warning",
       "hier_label_mismatch": "error",
@@ -467,7 +469,7 @@
     "pinned_symbol_libs": []
   },
   "meta": {
-    "filename": "dualScaleBoard_hx711.kicad_pro",
+    "filename": "camel.kicad_pro",
     "version": 1
   },
   "net_settings": {
@@ -544,7 +546,7 @@
           "group_by": false,
           "label": "Datasheet",
           "name": "Datasheet",
-          "show": true
+          "show": false
         },
         {
           "group_by": false,
@@ -563,13 +565,73 @@
           "label": "DNP",
           "name": "${DNP}",
           "show": true
+        },
+        {
+          "group_by": false,
+          "label": "#",
+          "name": "${ITEM_NUMBER}",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Comment",
+          "name": "Comment",
+          "show": true
+        },
+        {
+          "group_by": false,
+          "label": "LCSC",
+          "name": "LCSC",
+          "show": true
+        },
+        {
+          "group_by": false,
+          "label": "LCSCN",
+          "name": "LCSCN",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "MANUFACTURER",
+          "name": "MANUFACTURER",
+          "show": true
+        },
+        {
+          "group_by": false,
+          "label": "MFRN",
+          "name": "MFRN",
+          "show": true
+        },
+        {
+          "group_by": false,
+          "label": "PKG",
+          "name": "PKG",
+          "show": true
+        },
+        {
+          "group_by": false,
+          "label": "Description",
+          "name": "Description",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "LCSC Part",
+          "name": "LCSC Part",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Package",
+          "name": "Package",
+          "show": false
         }
       ],
       "filter_string": "",
       "group_symbols": true,
-      "name": "Grouped By Value",
+      "name": "",
       "sort_asc": true,
-      "sort_field": "Reference"
+      "sort_field": "Package"
     },
     "connection_grid_size": 50.0,
     "drawing": {

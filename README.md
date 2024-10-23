@@ -1,6 +1,6 @@
 # Camel Dual HX711 Weigh Scales Board
 
-Camel is a board with Dual HX711 Weight Scales ADCs controlled by a low power STM32L010F4 MCU providing an I2C interface.
+Camel is a board with Dual HX711 Weigh Scales ADCs controlled by a low power STM32L010F4 MCU providing an I2C slave interface.
 Power is provided by an I2C Adafruit STEMMA compatible 4-pin JST PH (2mm pitch) connector. For this board we require
 5V power (STEMMA requires devices support 3-5V DC):
 Pinout
