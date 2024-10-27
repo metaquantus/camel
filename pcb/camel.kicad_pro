@@ -252,9 +252,7 @@
     "equivalence_files": []
   },
   "erc": {
-    "erc_exclusions": [
-      "pin_not_driven|1041400|495300|9bd19031-662d-4459-a94c-b6c54f1e5cac|00000000-0000-0000-0000-000000000000|/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0|/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0|"
-    ],
+    "erc_exclusions": [],
     "meta": {
       "version": 0
     },
@@ -504,8 +502,8 @@
       "gencad": "",
       "idf": "",
       "netlist": "",
-      "plot": "",
-      "pos_files": "",
+      "plot": "build/gerbers",
+      "pos_files": "build/",
       "specctra_dsn": "",
       "step": "",
       "svg": "",
