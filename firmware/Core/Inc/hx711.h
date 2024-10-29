@@ -5,8 +5,8 @@
  *      Author: cav
  */
 
-#ifndef INC_SCALES_H_
-#define INC_SCALES_H_
+#ifndef INC_HX711_H_
+#define INC_HX711_H_
 
 #include "main.h"
 
@@ -27,4 +27,4 @@ void HX711_read(HX711_TypeDef* lcell, HX711_TypeDef* rcell);
 void HX711_powerUp(HX711_TypeDef* cell);
 void HX711_powerDown(HX711_TypeDef* cell);
 
-#endif /* INC_SCALES_H_ */
+#endif /* INC_HX711_H_ */

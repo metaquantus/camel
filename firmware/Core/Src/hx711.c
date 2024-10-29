@@ -4,7 +4,7 @@
  *  Created on: Oct 27, 2024
  *      Author: cav
  */
-#include "scales.h"
+#include <hx711.h>
 #include "main.h"
 
 /*

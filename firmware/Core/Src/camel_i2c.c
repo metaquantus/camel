@@ -12,9 +12,9 @@
  *  No sub-addresses (registers) are needed, so it's simple.
  */
 
+#include <hx711.h>
 #include "camel_i2c.h"
 #include "main.h"
-#include "scales.h"
 
 extern I2C_HandleTypeDef hi2c1;
 extern uint8_t SCALES_DATA[SCALES_DATA_SIZE];

@@ -57,6 +57,7 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define CAMEL_ADDRESS 0x75
 #define LED1_Pin GPIO_PIN_14
 #define LED1_GPIO_Port GPIOC
 #define SCK2_Pin GPIO_PIN_5

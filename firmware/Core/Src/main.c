@@ -41,11 +41,11 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include <hx711.h>
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "scales.h"
 #include "camel_i2c.h"
 /* USER CODE END Includes */
 
@@ -218,59 +218,6 @@ int main(void)
   /* USER CODE END 3 */
 }
 
-/*
-   We only support one receive command (master transmit):
-     the configuration command.
-   It consists of two nibbles, the most significant for the left cell,
-   and the least significant for the right cell:
-     00110011
-   bit 0 of each nibble sets whether to enable/disable the corresponding cell
-   bit 1 sets the gain factor: 0 for 64 or 1 for 128
-   e.g: 0x33 enables both cells at 128 gain factor
-   The other bits are ignored, reserved for future use, set to 0.
-   If the enable bit is changed from previous value, then the modified state is also set to let the main
-   loop know and do the job.
- */
-void parseConfig(void) {
-  // left cell gain
-  if ((SCALES_CONFIG & 0x20) != 0) {
-    leftCell.GAIN = 1; // 128, channel A
-  } else {
-    leftCell.GAIN = 3; // 64, channel A
-  }
-  // right cell gain
-  if ((SCALES_CONFIG & 0x02) != 0) {
-    rightCell.GAIN = 1; // 128, channel A
-  } else {
-    rightCell.GAIN = 3; // 64, channel A
-  }
-  // left cell enable
-  if ((SCALES_CONFIG & 0x10) != 0) {
-    if (!leftCell.enabled) {
-      leftCell.enabled = 1;
-      leftCell.modified = 1;
-    }
-  } else {
-    if (leftCell.enabled) {
-      leftCell.enabled = 0;
-      leftCell.modified = 1;
-    }
-  }
-  // right cell enable
-  if ((SCALES_CONFIG & 0x01) != 0) {
-    if (!rightCell.enabled) {
-      rightCell.enabled = 1;
-      rightCell.modified = 1;
-    }
-  } else {
-    if (rightCell.enabled) {
-      rightCell.enabled = 0;
-      rightCell.modified = 1;
-    }
-  }
-  SCALES_CONFIG &= 0x00FF;
-}
-
 /**
   * @brief System Clock Configuration
   * @retval None
@@ -338,7 +285,7 @@ static void MX_I2C1_Init(void)
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
   hi2c1.Init.Timing = 0x00B07CB4;
-  hi2c1.Init.OwnAddress1 = 234;
+  hi2c1.Init.OwnAddress1 = CAMEL_ADDRESS << 1;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
   hi2c1.Init.OwnAddress2 = 0;
@@ -429,6 +376,58 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+/*
+   We only support one receive command (master transmit):
+     the configuration command.
+   It consists of two nibbles, the most significant for the left cell,
+   and the least significant for the right cell:
+     00110011
+   bit 0 of each nibble sets whether to enable/disable the corresponding cell
+   bit 1 sets the gain factor: 0 for 64 or 1 for 128
+   e.g: 0x33 enables both cells at 128 gain factor
+   The other bits are ignored, reserved for future use, set to 0.
+   If the enable bit is changed from previous value, then the modified state is also set to let the main
+   loop know and do the job.
+ */
+void parseConfig(void) {
+  // left cell gain
+  if ((SCALES_CONFIG & 0x20) != 0) {
+    leftCell.GAIN = 1; // 128, channel A
+  } else {
+    leftCell.GAIN = 3; // 64, channel A
+  }
+  // right cell gain
+  if ((SCALES_CONFIG & 0x02) != 0) {
+    rightCell.GAIN = 1; // 128, channel A
+  } else {
+    rightCell.GAIN = 3; // 64, channel A
+  }
+  // left cell enable
+  if ((SCALES_CONFIG & 0x10) != 0) {
+    if (!leftCell.enabled) {
+      leftCell.enabled = 1;
+      leftCell.modified = 1;
+    }
+  } else {
+    if (leftCell.enabled) {
+      leftCell.enabled = 0;
+      leftCell.modified = 1;
+    }
+  }
+  // right cell enable
+  if ((SCALES_CONFIG & 0x01) != 0) {
+    if (!rightCell.enabled) {
+      rightCell.enabled = 1;
+      rightCell.modified = 1;
+    }
+  } else {
+    if (rightCell.enabled) {
+      rightCell.enabled = 0;
+      rightCell.modified = 1;
+    }
+  }
+  SCALES_CONFIG &= 0x00FF;
+}
 
 /* USER CODE END 4 */
 
