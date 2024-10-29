@@ -3,6 +3,13 @@
  *
  *  Created on: Oct 27, 2024
  *      Author: cav
+ *
+ *  Camel I2C slave communications.
+ *  We support 1 (host) transmit command receiving 1 configuration byte
+ *  and a (host) read command that can send 3 or 6 bytes depending on
+ *  whether both HX711 cells are enabled or only one.
+ *  The configuration command enables or disables the cells.
+ *  No sub-addresses (registers) are needed, so it's simple.
  */
 
 #include "camel_i2c.h"
@@ -11,68 +18,24 @@
 
 extern I2C_HandleTypeDef hi2c1;
 extern uint8_t SCALES_DATA[SCALES_DATA_SIZE];
+extern uint16_t SCALES_CONFIG;
 extern HX711_TypeDef leftCell;
 extern HX711_TypeDef rightCell;
 
 #define RxSIZE  1
 static uint8_t RxData[RxSIZE];
 static uint8_t rxcount = 0;
-static uint8_t txcount=0;
+static uint8_t txcount = 0;
 static uint8_t startPosition=0;
 // static int counterror = 0;
 
 void process_data (void)
 {
-  /*
-	   We only support one receive command (master transmit):
-       the configuration command.
-     It consists of two nibbles, the most significant for the left cell,
-     and the least significant for the right cell:
-       00110011
-     bit 0 of each nibble sets whether to enable/disable the corresponding cell
-     bit 1 sets the gain factor: 0 for 64 or 1 for 128
-     e.g: 0x33 enables both cells at 128 gain factor
-     The other bits are ignored, reserved for future use, set to 0.
-     If the enable bit is changed from previous value, then the modified state is also set to let the main
-     loop know and do the job.
-   */
-  uint8_t config = RxData[0];
-  // left cell gain
-  if ( (config & 0x20) != 0 ) {
-    leftCell.GAIN = 1; // 128, channel A
-  } else {
-    leftCell.GAIN = 3; // 64, channel A
-  }
-  // right cell gain
-  if ( (config & 0x02) != 0 ) {
-    rightCell.GAIN = 1; // 128, channel A
-  } else {
-    rightCell.GAIN = 3; // 64, channel A
-  }
-  // left cell enable
-  if ( (config & 0x10) != 0 ) {
-    if ( ! leftCell.enabled ) {
-      leftCell.enabled = 1;
-      leftCell.modified = 1;
-    }
-  } else {
-    if (leftCell.enabled) {
-      leftCell.enabled = 0;
-      leftCell.modified = 1;
-    }
-  }
-  // right cell enable
-  if ((config & 0x01) != 0) {
-    if (!rightCell.enabled) {
-      rightCell.enabled = 1;
-      rightCell.modified = 1;
-    }
-  } else {
-    if (rightCell.enabled) {
-      rightCell.enabled = 0;
-      rightCell.modified = 1;
-    }
-  }
+  // just pass the data to the main loop for parsing
+  // so we spend less time in the interrupt
+  SCALES_CONFIG = RxData[0];
+  // MSB is used to indicate modified
+  SCALES_CONFIG &= 0x80FF;
 }
 
 void HAL_I2C_ListenCpltCallback(I2C_HandleTypeDef *hi2c)
@@ -93,35 +56,37 @@ void HAL_I2C_AddrCallback(I2C_HandleTypeDef *hi2c, uint8_t TransferDirection, ui
 	{
 	  // If both cells are enabled, transmit the whole 6 bytes, left Cell first;
 	  // otherwise only transmit the 3 bytes of the enabled cell
-	  txcount = 0;
+	  txcount = 3;
 	  startPosition = 0;
 	  if ( !leftCell.enabled && rightCell.enabled ) {
 	    startPosition = 3;
 	  }
-	  // transmit first byte, maximum 3 or 6 bytes depending on whether both cells are enabled or only one
-	  HAL_I2C_Slave_Seq_Transmit_IT(hi2c, SCALES_DATA + startPosition + txcount, 1, I2C_FIRST_FRAME);
+	  if ( leftCell.enabled && rightCell.enabled ) {
+	    txcount=6;
+	  }
+	  // transmit 3 or 6 bytes depending on whether both cells are enabled or only one
+	  HAL_I2C_Slave_Seq_Transmit_IT(hi2c, SCALES_DATA + startPosition, txcount, I2C_FIRST_AND_LAST_FRAME);
 	}
 }
 
 void HAL_I2C_SlaveTxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
-  txcount++;
-  uint32_t frame = I2C_NEXT_FRAME;
+  /* nothing to do, we have sent right amount of data or host aborted before finish, getting an AF error
+
+  // if no cells are enabled we still send 3 bytes of garbage
   uint8_t maxcount = 3;
+
   if ( leftCell.enabled && rightCell.enabled ) {
     maxcount = 6;
   }
-  /* redundant test
-  else if ( leftCell.enabled || rightCell.enabled ) {
-    maxcount = 3;
-  }
-  */
+  uint32_t frame = I2C_NEXT_FRAME;
   if ( txcount == maxcount ) {
     // transmit the last frame,
     // if master quits receiving before this, we'll get an AF error, but it's fine
     frame = I2C_LAST_FRAME;
   }
   HAL_I2C_Slave_Seq_Transmit_IT(hi2c, SCALES_DATA + startPosition + txcount, 1, frame);
+  */
 }
 
 
@@ -147,7 +112,7 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c)
 	}
 	*/
 
-	// only 1 byte to receive
+	// only 1 byte to receive, so if we are here, that's it
 	process_data();
 
 }
@@ -160,8 +125,11 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 	{
 	  if ( txcount == 0 ) { // error is while slave is receiving
 	    rxcount = 0;
+	    // host probably tried to send more than 1 byte,
+	    // reject it and process the first byte as normal
 	    process_data();
 	  } else { // error while slave is transmitting
+	    // just reset, the host didn't want more data
 	    txcount = 0;
 	  }
 	}
@@ -176,8 +144,10 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 		HAL_I2C_Init(hi2c);
 		// memset(RxData,'\0',RxSIZE);  // reset the Rx buffer
 		RxData[0] = '\0';
-		rxcount =0;  // reset the count
+		// reset the count
+		rxcount = 0;
+		txcount = 0;
 	}
-
+	// everything good, keep listening
 	HAL_I2C_EnableListen_IT(hi2c);
 }

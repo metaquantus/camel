@@ -6,12 +6,36 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2024 STMicroelectronics.
+  * Copyright (c) 2024 MetaQuantus
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
   * in the root directory of this software component.
   * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  * The Camel board contains dual HX711 ADC converters for load cells in
+  * a bridge configuration. The board wires the HX711s to 10 samples per
+  * second using the internal oscillator. Only channel A is used in each HX711.
+  * The HX711s are identified as "left" and "right" and each can be separately
+  * configured to 128 or 64 gain factor or power down.
+  * The MCU drives the HX711s, starting the conversions, reading the data
+  * continuously and storing it for transmission. It provides I2C slave communications using
+  * a simple protocol. The data is simply sent as read, no further conversions
+  * or scaling is done.
+  *
+  * For complete functionality, the host must implement the usual weigh scales
+  * functions like scaling to weight units, calibration, tare, etc.
+  *
+  * This program code manages the HX711s and handles the I2C slave communications.
+  *
+  * The board also wires up the USART to a connector and it might be possible
+  * to provide some functionality like diagnostics. However, this
+  * MCU only has 16KB of flash memory, so it's very tight, current code
+  * without debugging info takes up 10KB, and adding the USART code may not fit.
+  *
+  * Total current consumption is about 8mA, and disabling one of the
+  * HX711s saves about 1.5mA.
   *
   ******************************************************************************
   */
@@ -32,7 +56,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define SCAN_FREQ 5
+#define LED_PERIOD (800 / SCAN_FREQ)
+// wait 2 seconds before reporting mode
+#define LED_WAIT (2000 / SCAN_FREQ)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -48,6 +75,7 @@ I2C_HandleTypeDef hi2c1;
 HX711_TypeDef leftCell = { DOUT1_GPIO_Port, DOUT1_Pin, SCK1_GPIO_Port, SCK1_Pin, 1, 1, 0 };
 HX711_TypeDef rightCell= { DOUT2_GPIO_Port, DOUT2_Pin, SCK2_GPIO_Port, SCK2_Pin, 1, 1, 0 };
 uint8_t SCALES_DATA[SCALES_DATA_SIZE] = { 0, 0, 0, 0, 0, 0 };
+uint16_t SCALES_CONFIG = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -55,7 +83,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
-
+void parseConfig();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -71,7 +99,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  uint16_t ledWaitCount = 0;
+  uint16_t ledCount = 0;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -94,7 +123,7 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -104,6 +133,9 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    if ( (SCALES_CONFIG & 0x8000) != 0) {
+      parseConfig();
+    }
 	  if ( leftCell.modified ) {
 		  if ( leftCell.enabled ) {
 			  HX711_powerUp(&leftCell);
@@ -111,6 +143,9 @@ int main(void)
 			  HX711_powerDown(&leftCell);
 		  }
 		  leftCell.modified = 0;
+		  // report change
+		  ledWaitCount = 0;
+		  ledCount = 0;
 	  }
 		if (rightCell.modified) {
 			if (rightCell.enabled) {
@@ -118,20 +153,122 @@ int main(void)
 			} else {
 				HX711_powerDown(&rightCell);
 			}
-			rightCell.modified = 0;
+      rightCell.modified = 0;
+      // report change
+      ledWaitCount = 0;
+      ledCount = 0;
 		}
+		if ( ledWaitCount == 0 ) {
+		  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+		}
+
+		// if both cells are enabled, wait for both to be ready
+		// and read them together, so next time they we'll be ready
+		// about the same time
 	  uint8_t leftReady = leftCell.enabled && HX711_isReady(&leftCell) ;
 	  uint8_t rightReady = rightCell.enabled && HX711_isReady(&rightCell);
+
 	  if ( ( leftCell.enabled && rightCell.enabled && leftReady && rightReady ) ||
 		   ( leftCell.enabled && !rightCell.enabled && leftReady ) ||
 		   ( !leftCell.enabled && rightCell.enabled && rightReady ) ) {
-		  HX711_readScales(&leftCell, &rightCell);
+		  HX711_read(&leftCell, &rightCell);
 	  }
+	  // LED:
+	  // wait 2 seconds before lighting the LED to report config status
+	  // to give host time to initialize this board.
+	  // 1 pulse for leftCell enabled only,
+	  // 2 pulses for rightCell enabled only,
+	  // 3 pulses for both leftCell and rightCells enabled
+	  // We may get 3 pulses for the default configuration
+	  // if host didn't configured us quick enough.
+	  if ( ledWaitCount < LED_WAIT ) {
+	    ledWaitCount++;
+	  } else {
+	    if ( ledCount == 0 ) {
+	      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+	    } else if ( ledCount == LED_PERIOD ) {
+	      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+	    }
+	    if ( rightCell.enabled ) {
+	      if ( ledCount == LED_PERIOD * 2 ) {
+	        HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+	      } else if ( ledCount == LED_PERIOD * 3 ) {
+	        HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+	      }
+	    }
+	    if ( leftCell.enabled && rightCell.enabled ) {
+        if (ledCount == LED_PERIOD * 4) {
+          HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+        } else if (ledCount == LED_PERIOD * 5) {
+          HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+        }
+	    }
+	    if ( ledCount < LED_PERIOD * 5 ) {
+	      ledCount++;
+	    }
+	  }
+
 	  // HX711 are setup at 10 samples per second (every 100ms)
-	  // conversion starts at end of the read, poll conservatively
-	  HAL_Delay(17);
+	  // conversion starts at end of the read,
+	  // we don't want to poll too often but enough to detect
+	  // conversion ready without loosing too much time
+	  // TODO: use external interrupt from DOUT lines to detect ready state.
+	  HAL_Delay(SCAN_FREQ);
   }
   /* USER CODE END 3 */
+}
+
+/*
+   We only support one receive command (master transmit):
+     the configuration command.
+   It consists of two nibbles, the most significant for the left cell,
+   and the least significant for the right cell:
+     00110011
+   bit 0 of each nibble sets whether to enable/disable the corresponding cell
+   bit 1 sets the gain factor: 0 for 64 or 1 for 128
+   e.g: 0x33 enables both cells at 128 gain factor
+   The other bits are ignored, reserved for future use, set to 0.
+   If the enable bit is changed from previous value, then the modified state is also set to let the main
+   loop know and do the job.
+ */
+void parseConfig(void) {
+  // left cell gain
+  if ((SCALES_CONFIG & 0x20) != 0) {
+    leftCell.GAIN = 1; // 128, channel A
+  } else {
+    leftCell.GAIN = 3; // 64, channel A
+  }
+  // right cell gain
+  if ((SCALES_CONFIG & 0x02) != 0) {
+    rightCell.GAIN = 1; // 128, channel A
+  } else {
+    rightCell.GAIN = 3; // 64, channel A
+  }
+  // left cell enable
+  if ((SCALES_CONFIG & 0x10) != 0) {
+    if (!leftCell.enabled) {
+      leftCell.enabled = 1;
+      leftCell.modified = 1;
+    }
+  } else {
+    if (leftCell.enabled) {
+      leftCell.enabled = 0;
+      leftCell.modified = 1;
+    }
+  }
+  // right cell enable
+  if ((SCALES_CONFIG & 0x01) != 0) {
+    if (!rightCell.enabled) {
+      rightCell.enabled = 1;
+      rightCell.modified = 1;
+    }
+  } else {
+    if (rightCell.enabled) {
+      rightCell.enabled = 0;
+      rightCell.modified = 1;
+    }
+  }
+  SCALES_CONFIG &= 0x00FF;
 }
 
 /**
