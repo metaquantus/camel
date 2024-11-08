@@ -4529,6 +4529,16 @@
 	)
 	(wire
 		(pts
+			(xy 274.32 74.93) (xy 274.32 78.105)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "28cd779a-80fa-4b33-9ea5-c9b960a54dbd")
+	)
+	(wire
+		(pts
 			(xy 259.08 92.71) (xy 250.19 92.71)
 		)
 		(stroke
@@ -4889,7 +4899,7 @@
 	)
 	(wire
 		(pts
-			(xy 245.11 76.2) (xy 266.7 76.2)
+			(xy 245.11 76.2) (xy 264.16 76.2)
 		)
 		(stroke
 			(width 0)
@@ -5359,6 +5369,16 @@
 	)
 	(wire
 		(pts
+			(xy 274.32 62.865) (xy 274.32 67.31)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "814864ad-8dc1-4486-82c6-4f09d60c59a6")
+	)
+	(wire
+		(pts
 			(xy 69.215 42.545) (xy 60.96 42.545)
 		)
 		(stroke
@@ -5369,7 +5389,7 @@
 	)
 	(wire
 		(pts
-			(xy 266.7 82.55) (xy 266.7 92.71)
+			(xy 264.16 82.55) (xy 264.16 92.71)
 		)
 		(stroke
 			(width 0)
@@ -5559,7 +5579,7 @@
 	)
 	(wire
 		(pts
-			(xy 266.7 92.71) (xy 259.08 92.71)
+			(xy 264.16 92.71) (xy 259.08 92.71)
 		)
 		(stroke
 			(width 0)
@@ -5679,7 +5699,7 @@
 	)
 	(wire
 		(pts
-			(xy 266.7 77.47) (xy 266.7 76.2)
+			(xy 264.16 77.47) (xy 264.16 76.2)
 		)
 		(stroke
 			(width 0)
@@ -6825,6 +6845,28 @@
 		)
 		(uuid "47048fd0-26a5-4d03-af7c-351c51bbd030")
 	)
+	(label "SWCLK"
+		(at 274.32 72.39 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "52b0b9db-9646-48da-ae5c-1dd443b0bb66")
+	)
+	(label "SWDIO"
+		(at 274.32 69.85 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right bottom)
+		)
+		(uuid "52e71cea-505b-45e5-99a9-e2666128b0ba")
+	)
 	(label "DOUT2"
 		(at 109.22 123.19 0)
 		(fields_autoplaced yes)
@@ -7865,7 +7907,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "MountingHole:MountingHole_3.5mm"
+		(property "Footprint" "MountingHole:MountingHole_3.2mm_M3"
 			(at 86.995 180.34 0)
 			(effects
 				(font
@@ -8688,7 +8730,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "MountingHole:MountingHole_3.5mm"
+		(property "Footprint" "MountingHole:MountingHole_3.2mm_M3"
 			(at 63.5 180.34 0)
 			(effects
 				(font
@@ -10568,7 +10610,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "MountingHole:MountingHole_3.5mm"
+		(property "Footprint" "MountingHole:MountingHole_3.2mm_M3"
 			(at 40.64 180.34 0)
 			(effects
 				(font
@@ -10937,7 +10979,7 @@
 	)
 	(symbol
 		(lib_id "camel:RCLAMP0521P-N")
-		(at 266.7 80.01 270)
+		(at 264.16 80.01 270)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -10945,7 +10987,7 @@
 		(dnp no)
 		(uuid "5048d6d5-ead8-4286-a7de-5affbe8b06f3")
 		(property "Reference" "D5"
-			(at 268.478 80.01 90)
+			(at 265.938 80.01 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10954,7 +10996,7 @@
 			)
 		)
 		(property "Value" "RCLAMP0521P-N"
-			(at 269.24 81.28 90)
+			(at 266.7 81.28 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10964,15 +11006,6 @@
 			)
 		)
 		(property "Footprint" "camel:X1-DFN1006-2_L1.0-W0.6-BI"
-			(at 259.08 80.01 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "https://lcsc.com/product-detail/Others_Bourne-Semicon-Shenzhen-RCLAMP0521P-N_C316043.html"
 			(at 256.54 80.01 0)
 			(effects
 				(font
@@ -10981,8 +11014,17 @@
 				(hide yes)
 			)
 		)
+		(property "Datasheet" "https://lcsc.com/product-detail/Others_Bourne-Semicon-Shenzhen-RCLAMP0521P-N_C316043.html"
+			(at 254 80.01 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(property "Description" ""
-			(at 266.7 80.01 0)
+			(at 264.16 80.01 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10991,7 +11033,7 @@
 			)
 		)
 		(property "LCSC" "C316043"
-			(at 254 80.01 0)
+			(at 251.46 80.01 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11000,7 +11042,7 @@
 			)
 		)
 		(property "MANUFACTURER" "BORN"
-			(at 266.7 80.01 90)
+			(at 264.16 80.01 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11009,7 +11051,7 @@
 			)
 		)
 		(property "MFRN" "RCLAMP0521P-N"
-			(at 266.7 80.01 90)
+			(at 264.16 80.01 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11018,7 +11060,7 @@
 			)
 		)
 		(property "PKG" "0402"
-			(at 266.7 80.01 90)
+			(at 264.16 80.01 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11027,7 +11069,7 @@
 			)
 		)
 		(property "LCSC Part" "C316043"
-			(at 254 80.01 0)
+			(at 251.46 80.01 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11036,7 +11078,7 @@
 			)
 		)
 		(property "Comment" "3.5A@8/20us 16V 6V 5V 0402 ESD and Surge Protection (TVS/ESD) ROHS"
-			(at 266.7 80.01 0)
+			(at 264.16 80.01 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11045,7 +11087,7 @@
 			)
 		)
 		(property "LCSCN" ""
-			(at 266.7 80.01 0)
+			(at 264.16 80.01 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12108,6 +12150,72 @@
 			(project "camel"
 				(path "/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0"
 					(reference "L1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:+3V3")
+		(at 274.32 62.865 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "6287486d-ea4f-4642-802e-2ef4e4c433fb")
+		(property "Reference" "#PWR0102"
+			(at 274.32 66.675 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "+3V3"
+			(at 274.32 57.785 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 274.32 62.865 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 274.32 62.865 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"+3V3\""
+			(at 274.32 62.865 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "ecb3a1f3-c730-4667-bfe5-df0a2d0ee48b")
+		)
+		(instances
+			(project "camel"
+				(path "/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0"
+					(reference "#PWR0102")
 					(unit 1)
 				)
 			)
@@ -13831,7 +13939,7 @@
 				(justify left)
 			)
 		)
-		(property "Footprint" "MountingHole:MountingHole_3.5mm"
+		(property "Footprint" "MountingHole:MountingHole_3.2mm_M3"
 			(at 19.685 180.34 0)
 			(effects
 				(font
@@ -15900,6 +16008,100 @@
 		)
 	)
 	(symbol
+		(lib_id "Connector_Generic:Conn_01x04")
+		(at 279.4 69.85 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board yes)
+		(dnp no)
+		(uuid "df45835b-4eef-42e4-b5b5-b1d72558bdf8")
+		(property "Reference" "J6"
+			(at 278.13 64.135 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "Conn_01x04"
+			(at 282.575 72.39 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Footprint" "camel:Pad_1x04_P2.54mm"
+			(at 279.4 69.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 279.4 69.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Generic connector, single row, 01x04, script generated (kicad-library-utils/schlib/autogen/connector/)"
+			(at 279.4 69.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Comment" ""
+			(at 279.4 69.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "LCSCN" ""
+			(at 279.4 69.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "74b1f1cc-fbdc-47ed-809f-13a6b509342d")
+		)
+		(pin "2"
+			(uuid "21d57101-10e7-45c8-a66b-51f1f94b5a52")
+		)
+		(pin "3"
+			(uuid "71a937d6-93f8-4505-b0df-431aad839c00")
+		)
+		(pin "4"
+			(uuid "683adc29-0a23-4c9e-a5fb-acd11d99c2b9")
+		)
+		(instances
+			(project "camel"
+				(path "/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0"
+					(reference "J6")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Mechanical:Fiducial")
 		(at 40.64 191.135 0)
 		(unit 1)
@@ -16553,6 +16755,72 @@
 			(project ""
 				(path "/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0"
 					(reference "#PWR01")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GND")
+		(at 274.32 78.105 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "f70f6cb1-2c8f-4518-aad8-c6c82fdbb353")
+		(property "Reference" "#PWR0101"
+			(at 274.32 84.455 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 274.32 83.185 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 274.32 78.105 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 274.32 78.105 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Power symbol creates a global label with name \"GND\" , ground"
+			(at 274.32 78.105 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "697c095b-87f9-4d3b-a543-5fe7c7d8e4a7")
+		)
+		(instances
+			(project "camel"
+				(path "/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0"
+					(reference "#PWR0101")
 					(unit 1)
 				)
 			)

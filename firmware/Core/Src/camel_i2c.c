@@ -33,9 +33,9 @@ void process_data (void)
 {
   // just pass the data to the main loop for parsing
   // so we spend less time in the interrupt
-  SCALES_CONFIG = RxData[0];
+  SCALES_CONFIG = RxData[0] & 0xFF;
   // MSB is used to indicate modified
-  SCALES_CONFIG &= 0x80FF;
+  SCALES_CONFIG |= 0x8000;
 }
 
 void HAL_I2C_ListenCpltCallback(I2C_HandleTypeDef *hi2c)

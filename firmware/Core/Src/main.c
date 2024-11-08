@@ -56,7 +56,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define SCAN_FREQ 5
+#define SCAN_FREQ 2
 #define LED_PERIOD (800 / SCAN_FREQ)
 // wait 2 seconds before reporting mode
 #define LED_WAIT (2000 / SCAN_FREQ)
@@ -377,13 +377,16 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 /*
+   Parse the configuration data sent from the host and
+   set the parameters for next conversion or power down an HX711.
    We only support one receive command (master transmit):
      the configuration command.
    It consists of two nibbles, the most significant for the left cell,
    and the least significant for the right cell:
      00110011
    bit 0 of each nibble sets whether to enable/disable the corresponding cell
-   bit 1 sets the gain factor: 0 for 64 or 1 for 128
+         where 0 means to power down the device, e.g. put it in sleep mode
+   bit 1 sets the gain factor: 0 for 64 or 1 for 128, the only 2 values valid for channel A
    e.g: 0x33 enables both cells at 128 gain factor
    The other bits are ignored, reserved for future use, set to 0.
    If the enable bit is changed from previous value, then the modified state is also set to let the main
