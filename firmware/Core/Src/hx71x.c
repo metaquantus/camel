@@ -4,7 +4,7 @@
  *  Created on: Oct 27, 2024
  *      Author: cav
  */
-#include <hx711.h>
+#include <hx71x.h>
 #include "main.h"
 
 /*
@@ -41,7 +41,7 @@ uint8_t shiftIn(uint8_t dataPin, uint8_t clockPin, uint8_t bitOrder) {
 */
 
 // reads one byte from both left and right HX711s
-uint16_t shiftIn(HX711_TypeDef *lcell, HX711_TypeDef *rcell) {
+uint16_t shiftIn(HX71x_TypeDef *lcell, HX71x_TypeDef *rcell) {
   uint16_t lvalue = 0;
   uint16_t rvalue = 0;
   uint8_t i;
@@ -77,7 +77,7 @@ uint16_t shiftIn(HX711_TypeDef *lcell, HX711_TypeDef *rcell) {
   return (lvalue << 8) | rvalue;
 }
 
-void HX711_read(HX711_TypeDef* lcell, HX711_TypeDef* rcell) {
+void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 	// cells should be in ready state if enabled
 	uint16_t data[3] = {0, 0, 0};
 
@@ -132,15 +132,15 @@ void HX711_read(HX711_TypeDef* lcell, HX711_TypeDef* rcell) {
 
 }
 
-uint8_t HX711_isReady(HX711_TypeDef* cell) {
+uint8_t HX71x_isReady(HX71x_TypeDef* cell) {
 	return HAL_GPIO_ReadPin(cell->DOUT_Port, cell->DOUT_Pin) == GPIO_PIN_RESET;
 }
 
-void HX711_powerUp(HX711_TypeDef* cell) {
+void HX71x_powerUp(HX71x_TypeDef* cell) {
 	HAL_GPIO_WritePin(cell->SCK_Port, cell->SCK_Pin, GPIO_PIN_RESET);
 }
 
-void HX711_powerDown(HX711_TypeDef* cell) {
+void HX71x_powerDown(HX71x_TypeDef* cell) {
 	HAL_GPIO_WritePin(cell->SCK_Port, cell->SCK_Pin, GPIO_PIN_RESET);
 	asm("NOP\n\tNOP\n\tNOP\n\tNOP\n\tNOP\n\tNOP");
 	HAL_GPIO_WritePin(cell->SCK_Port, cell->SCK_Pin, GPIO_PIN_SET);

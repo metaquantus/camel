@@ -41,12 +41,14 @@
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include <hx711.h>
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <string.h>
 #include "camel_i2c.h"
+#include "hx71x.h"
+#include "eeprom.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -60,6 +62,7 @@
 #define LED_PERIOD (800 / SCAN_FREQ)
 // wait 2 seconds before reporting mode
 #define LED_WAIT (2000 / SCAN_FREQ)
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -72,10 +75,11 @@ I2C_HandleTypeDef hi2c1;
 
 /* USER CODE BEGIN PV */
 // at reset both cells are enabled at 128 gain factor
-HX711_TypeDef leftCell = { DOUT1_GPIO_Port, DOUT1_Pin, SCK1_GPIO_Port, SCK1_Pin, 1, 1, 0 };
-HX711_TypeDef rightCell= { DOUT2_GPIO_Port, DOUT2_Pin, SCK2_GPIO_Port, SCK2_Pin, 1, 1, 0 };
+HX71x_TypeDef leftCell = { LEFT_DOUT_GPIO_Port, LEFT_DOUT_Pin, LEFT_SCK_GPIO_Port, LEFT_SCK_Pin, 1, 1, 0 };
+HX71x_TypeDef rightCell= { RIGHT_DOUT_GPIO_Port, RIGHT_DOUT_Pin, RIGHT_SCK_GPIO_Port, RIGHT_SCK_Pin, 1, 1, 0 };
 uint8_t SCALES_DATA[SCALES_DATA_SIZE] = { 0, 0, 0, 0, 0, 0 };
 uint16_t SCALES_CONFIG = 0;
+extern uint8_t EEPROM_DATA[EEPROM_DATA_SIZE];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -124,6 +128,12 @@ int main(void)
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+  //  read config and scaling factors from EEPROM
+  uint32_t leftScale = eeprom_read_word(CAMEL_LEFT_EEPROM_START);
+  memcpy(EEPROM_DATA, &leftScale, 4);
+  uint32_t rightScale = eeprom_read_word(CAMEL_RIGHT_EEPROM_START);
+  memcpy(EEPROM_DATA+4, &rightScale, 4);
+  SCALES_CONFIG = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START) | 0x8000;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -133,30 +143,27 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    if ( (SCALES_CONFIG & 0x8000) != 0) {
+    if ( (SCALES_CONFIG & 0xF000) != 0) {
       parseConfig();
-    }
-	  if ( leftCell.modified ) {
-		  if ( leftCell.enabled ) {
-			  HX711_powerUp(&leftCell);
-		  } else {
-			  HX711_powerDown(&leftCell);
-		  }
-		  leftCell.modified = 0;
-		  // report change
-		  ledWaitCount = 0;
-		  ledCount = 0;
-	  }
-		if (rightCell.modified) {
-			if (rightCell.enabled) {
-				HX711_powerUp(&rightCell);
-			} else {
-				HX711_powerDown(&rightCell);
-			}
-      rightCell.modified = 0;
       // report change
       ledWaitCount = 0;
       ledCount = 0;
+    }
+	  if ( leftCell.modified ) {
+		  if ( leftCell.enabled ) {
+			  HX71x_powerUp(&leftCell);
+		  } else {
+			  HX71x_powerDown(&leftCell);
+		  }
+		  leftCell.modified = 0;
+	  }
+		if (rightCell.modified) {
+			if (rightCell.enabled) {
+				HX71x_powerUp(&rightCell);
+			} else {
+				HX71x_powerDown(&rightCell);
+			}
+      rightCell.modified = 0;
 		}
 		if ( ledWaitCount == 0 ) {
 		  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
@@ -165,13 +172,13 @@ int main(void)
 		// if both cells are enabled, wait for both to be ready
 		// and read them together, so next time they we'll be ready
 		// about the same time
-	  uint8_t leftReady = leftCell.enabled && HX711_isReady(&leftCell) ;
-	  uint8_t rightReady = rightCell.enabled && HX711_isReady(&rightCell);
+	  uint8_t leftReady = leftCell.enabled && HX71x_isReady(&leftCell) ;
+	  uint8_t rightReady = rightCell.enabled && HX71x_isReady(&rightCell);
 
 	  if ( ( leftCell.enabled && rightCell.enabled && leftReady && rightReady ) ||
 		   ( leftCell.enabled && !rightCell.enabled && leftReady ) ||
 		   ( !leftCell.enabled && rightCell.enabled && rightReady ) ) {
-		  HX711_read(&leftCell, &rightCell);
+		  HX71x_read(&leftCell, &rightCell);
 	  }
 	  // LED:
 	  // wait 2 seconds before lighting the LED to report config status
@@ -339,10 +346,10 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SCK2_GPIO_Port, SCK2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(SCK1_GPIO_Port, SCK1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SCK1_GPIO_Port, SCK1_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(SCK2_GPIO_Port, SCK2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : LED1_Pin */
   GPIO_InitStruct.Pin = LED1_Pin;
@@ -351,25 +358,25 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : SCK2_Pin */
-  GPIO_InitStruct.Pin = SCK2_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SCK2_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : DOUT2_Pin DOUT1_Pin */
-  GPIO_InitStruct.Pin = DOUT2_Pin|DOUT1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
   /*Configure GPIO pin : SCK1_Pin */
   GPIO_InitStruct.Pin = SCK1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SCK1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : DOUT1_Pin DOUT2_Pin */
+  GPIO_InitStruct.Pin = DOUT1_Pin|DOUT2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : SCK2_Pin */
+  GPIO_InitStruct.Pin = SCK2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(SCK2_GPIO_Port, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -379,54 +386,102 @@ static void MX_GPIO_Init(void)
 /*
    Parse the configuration data sent from the host and
    set the parameters for next conversion or power down an HX711.
-   We only support one receive command (master transmit):
-     the configuration command.
-   It consists of two nibbles, the most significant for the left cell,
+   Configuration command consists of two nibbles, the most significant for the left cell,
    and the least significant for the right cell:
      00110011
    bit 0 of each nibble sets whether to enable/disable the corresponding cell
          where 0 means to power down the device, e.g. put it in sleep mode
-   bit 1 sets the gain factor: 0 for 64 or 1 for 128, the only 2 values valid for channel A
-   e.g: 0x33 enables both cells at 128 gain factor
-   The other bits are ignored, reserved for future use, set to 0.
+   bit 1 sets the gain factor: 0 for 64 or 1 for 128 for HX711 (CAMEL1); 0 for 128 or 1 for 256 for HX712 (CAMEL2)
+   bit 2 sets sampling rate for HX712: 0 for 10Hz or 1 for 40Hz
+   e.g: 0x33 enables both cells at 128 gain factor for HX711 or 256 gain factor at 10Hz for HX712
+
+   MS nibble encodes function: 0xF for config parsing, 0x4 for left scale store, 0x2 for right store, and 0x6 for both scales and config store.
+
    If the enable bit is changed from previous value, then the modified state is also set to let the main
    loop know and do the job.
  */
 void parseConfig(void) {
-  // left cell gain
-  if ((SCALES_CONFIG & 0x20) != 0) {
-    leftCell.GAIN = 1; // 128, channel A
-  } else {
-    leftCell.GAIN = 3; // 64, channel A
+  if ((SCALES_CONFIG & 0x6000) == 0x6000 ) {
+    eeprom_write_word(CAMEL_LEFT_EEPROM_START, (uint32_t) * (uint32_t *)EEPROM_DATA);
+    eeprom_write_word(CAMEL_RIGHT_EEPROM_START, (uint32_t) * (uint32_t *)(EEPROM_DATA+4));
+    eeprom_write_byte(CAMEL_CONFIG_EEPROM_START, (uint8_t) (SCALES_CONFIG & 0xFF) );
+  } else if ( (SCALES_CONFIG & 0x4000) != 0 ) {
+    eeprom_write_word(CAMEL_LEFT_EEPROM_START, (uint32_t) * (uint32_t *)EEPROM_DATA);
+  } else if ((SCALES_CONFIG & 0x2000) != 0) {
+    eeprom_write_word(CAMEL_RIGHT_EEPROM_START, (uint32_t) * (uint32_t *)(EEPROM_DATA+4));
   }
-  // right cell gain
-  if ((SCALES_CONFIG & 0x02) != 0) {
-    rightCell.GAIN = 1; // 128, channel A
-  } else {
-    rightCell.GAIN = 3; // 64, channel A
+  if ((SCALES_CONFIG & 0x8000) != 0) {
+#ifdef CAMEL1
+    // HX711
+    // left cell gain
+    if ((SCALES_CONFIG & 0x20) != 0) {
+      leftCell.GAIN = 1; // 128, channel A
+    } else {
+      leftCell.GAIN = 3; // 64, channel A
+    }
+    // right cell gain
+    if ((SCALES_CONFIG & 0x02) != 0) {
+      rightCell.GAIN = 1; // 128, channel A
+    } else {
+      rightCell.GAIN = 3; // 64, channel A
+    }
+#else
+  // HX712 CAMEL2
+  uint16_t c = (SCALES_CONFIG >> 5) & 0x03;
+  switch (c) {
+  case 0:
+    leftCell.GAIN = 1; // 128/10Hz
+    break;
+  case 1:
+    leftCell.GAIN = 4; // 256/10Hz
+    break;
+  case 2:
+    leftCell.GAIN = 3; // 128/40Hz
+    break;
+  case 3:
+    leftCell.GAIN = 5; // 256/40Hz
+    break;
   }
-  // left cell enable
-  if ((SCALES_CONFIG & 0x10) != 0) {
-    if (!leftCell.enabled) {
-      leftCell.enabled = 1;
-      leftCell.modified = 1;
+  c = (SCALES_CONFIG >> 1) & 0x03;
+  switch (c) {
+    case 0:
+      rightCell.GAIN = 1; // 128/10Hz
+      break;
+    case 1:
+      rightCell.GAIN = 4; // 256/10Hz
+      break;
+    case 2:
+      rightCell.GAIN = 3; // 128/40Hz
+      break;
+    case 3:
+      rightCell.GAIN = 5; // 256/40Hz
+      break;
     }
-  } else {
-    if (leftCell.enabled) {
-      leftCell.enabled = 0;
-      leftCell.modified = 1;
+
+#endif
+    // left cell enable
+    if ((SCALES_CONFIG & 0x10) != 0) {
+      if (!leftCell.enabled) {
+        leftCell.enabled = 1;
+        leftCell.modified = 1;
+      }
+    } else {
+      if (leftCell.enabled) {
+        leftCell.enabled = 0;
+        leftCell.modified = 1;
+      }
     }
-  }
-  // right cell enable
-  if ((SCALES_CONFIG & 0x01) != 0) {
-    if (!rightCell.enabled) {
-      rightCell.enabled = 1;
-      rightCell.modified = 1;
-    }
-  } else {
-    if (rightCell.enabled) {
-      rightCell.enabled = 0;
-      rightCell.modified = 1;
+    // right cell enable
+    if ((SCALES_CONFIG & 0x01) != 0) {
+      if (!rightCell.enabled) {
+        rightCell.enabled = 1;
+        rightCell.modified = 1;
+      }
+    } else {
+      if (rightCell.enabled) {
+        rightCell.enabled = 0;
+        rightCell.modified = 1;
+      }
     }
   }
   SCALES_CONFIG &= 0x00FF;

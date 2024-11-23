@@ -60,19 +60,46 @@ void Error_Handler(void);
 #define CAMEL_ADDRESS 0x75
 #define LED1_Pin GPIO_PIN_14
 #define LED1_GPIO_Port GPIOC
-#define SCK2_Pin GPIO_PIN_5
-#define SCK2_GPIO_Port GPIOA
-#define DOUT2_Pin GPIO_PIN_6
-#define DOUT2_GPIO_Port GPIOA
-#define DOUT1_Pin GPIO_PIN_7
+#define SCK1_Pin GPIO_PIN_5
+#define SCK1_GPIO_Port GPIOA
+#define DOUT1_Pin GPIO_PIN_6
 #define DOUT1_GPIO_Port GPIOA
-#define SCK1_Pin GPIO_PIN_1
-#define SCK1_GPIO_Port GPIOB
+#define DOUT2_Pin GPIO_PIN_7
+#define DOUT2_GPIO_Port GPIOA
+#define SCK2_Pin GPIO_PIN_1
+#define SCK2_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 // HX711 has 24bit resolution, times 2 cells
 // first 3 bytes for leftCell, last 3 bytes for rightCell
 #define SCALES_DATA_SIZE 6
+
+#ifdef CAMEL1
+
+#define LEFT_SCK_Pin        SCK2_Pin
+#define LEFT_SCK_GPIO_Port  SCK2_GPIO_Port
+#define LEFT_DOUT_Pin       DOUT2_Pin
+#define LEFT_DOUT_GPIO_Port DOUT2_GPIO_Port
+
+#define RIGHT_DOUT_Pin       DOUT1_Pin
+#define RIGHT_DOUT_GPIO_Port DOUT1_GPIO_Port
+#define RIGHT_SCK_Pin        SCK1_Pin
+#define RIGHT_SCK_GPIO_Port  SCK1_GPIO_Port
+
+#else
+
+#define LEFT_SCK_Pin        SCK1_Pin
+#define LEFT_SCK_GPIO_Port  SCK1_GPIO_Port
+#define LEFT_DOUT_Pin       DOUT1_Pin
+#define LEFT_DOUT_GPIO_Port DOUT1_GPIO_Port
+
+#define RIGHT_DOUT_Pin       DOUT2_Pin
+#define RIGHT_DOUT_GPIO_Port DOUT2_GPIO_Port
+#define RIGHT_SCK_Pin        SCK2_Pin
+#define RIGHT_SCK_GPIO_Port  SCK2_GPIO_Port
+
+#endif
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

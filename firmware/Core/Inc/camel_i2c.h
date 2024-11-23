@@ -10,6 +10,4 @@
 
 
 
-
-
 #endif /* INC_CAMEL_I2C_H_ */
