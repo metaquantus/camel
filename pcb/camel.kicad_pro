@@ -252,7 +252,11 @@
     "equivalence_files": []
   },
   "erc": {
-    "erc_exclusions": [],
+    "erc_exclusions": [
+      "lib_symbol_issues|1676400|990600|de050cec-b869-494d-bd72-47e752f2cc9c|00000000-0000-0000-0000-000000000000|||",
+      "pin_not_driven|1041400|482600|56e93a94-b96f-417b-9820-a30ee37e78b4|00000000-0000-0000-0000-000000000000|/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0|/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0|",
+      "pin_not_driven|1574800|965200|a4ad53a6-97f7-456c-beeb-b2198a775719|00000000-0000-0000-0000-000000000000|/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0|/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0|"
+    ],
     "meta": {
       "version": 0
     },
@@ -513,7 +517,7 @@
   },
   "schematic": {
     "annotate_start_num": 0,
-    "bom_export_filename": "",
+    "bom_export_filename": "build/camel_bom.csv",
     "bom_fmt_presets": [],
     "bom_fmt_settings": {
       "field_delimiter": ",",
@@ -562,7 +566,7 @@
           "group_by": true,
           "label": "DNP",
           "name": "${DNP}",
-          "show": true
+          "show": false
         },
         {
           "group_by": false,
