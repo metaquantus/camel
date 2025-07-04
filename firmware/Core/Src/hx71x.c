@@ -9,7 +9,8 @@
 
 /*
  * HX711s are wired at 10 samples per second, channel B is not used.
- * Each HX711 has its own separate PD_SCK clock signal, so it can be power down if not used.
+ * HX712 can sample at 10Hz or 40Hz controlled by configuration.
+ * Each HX71x has its own separate PD_SCK clock signal, so it can be power down if not used.
  * Power down is done by setting its PD_SCK to HIGH for more than 60us.
  * This MCU runs at 32MHz (31ns clock period), some extra delay is added using ASM NOPs.
  * The main loop waits for both left and right HX711s to be ready, so they can be read together.

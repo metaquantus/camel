@@ -20,18 +20,21 @@
 
 extern I2C_HandleTypeDef hi2c1;
 extern uint8_t SCALES_DATA[SCALES_DATA_SIZE];
-extern uint16_t SCALES_CONFIG;
+extern uint8_t SCALES_CONFIG;
+extern uint8_t CAL_COUNT;
+extern uint8_t CAL_OFFSET;
+extern uint8_t FUNC_FLAG;
 extern HX71x_TypeDef leftCell;
 extern HX71x_TypeDef rightCell;
-extern uint8_t EEPROM_DATA[EEPROM_DATA_SIZE];
+extern uint8_t CAL_DATA[CAMEL_CAL_DATA_SIZE];
 
 // first byte address/function and up to 8 bytes of data
-#define RxSIZE  9
+#define RxSIZE  10
 static uint8_t RxData[RxSIZE];
 static uint8_t rxcount = 0;
 static uint8_t txcount = 0;
 static uint8_t startPosition=0;
-#define TxSIZE 9
+#define TxSIZE 10
 static uint8_t TxData[TxSIZE];
 
 // static int counterror = 0;
@@ -45,76 +48,53 @@ static uint8_t rxmode = 0;
 void process_data (void)
 {
   uint8_t addr = RxData[0];
-
+  uint8_t caddr = addr & 0x8F;
   rxmode = 0;
-  /*
-  if (addr == 0x81) {
-    rxmode = 1;
-  } else if (addr == 0x82) {
-    rxmode = 2;
-  } else {
 
+  if (addr == 0) {
     // just pass the data to the main loop for parsing
     // so we spend less time in the interrupt
-    SCALES_CONFIG = addr & 0xFF;
-    // MSB is used to indicate modified
-    SCALES_CONFIG |= 0x8000;
-  }
-  */
-  switch(addr) {
-  case 0:
-    // just pass the data to the main loop for parsing
-    // so we spend less time in the interrupt
-    SCALES_CONFIG = RxData[1] & 0xFF;
-    // MSB nibble is used to indicate modified
-    SCALES_CONFIG |= 0x8000;
+    SCALES_CONFIG = RxData[1];
+    FUNC_FLAG = CONFIG_MASK;
+    // SCALES_CONFIG |= CONFIG_MASK;
+  } else if (caddr == 1) {
+    // left
+    // the calibration address is in the high nibble
+    // copy to buffer and pass to main loop for storing in EEPROM
+    uint32_t offset = (addr & 0x70) >> 4;
+    if ( offset >= 0 && offset < CAMEL_CAL_DATA_COUNT ) {
+      CAL_OFFSET = offset << 3; // offset * 8
+      uint8_t *pos = CAL_DATA + CAL_OFFSET ;
+      memcpy(pos, RxData+1, 8);
 
-    break;
-  case 1:
-    // pass data to main loop and process there
-    // left scaling factor store, data in EEPROM_DATA
-    SCALES_CONFIG |= 0x4000;
-    break;
-  case 2:
-    // pass data to main loop and do process there
-    // right scaling factor store, data in EEPROM_DATA
-    SCALES_CONFIG |= 0x2000;
-    break;
-  case 4:
-    // pass data to main loop and do process there
-    // left & right scaling factors store, data in EEPROM_DATA
-    // also store current config in EEPROM
-    SCALES_CONFIG |= 0x6000;
-    break;
-  case 0x80:
-    // read target indicated in second byte
-    // combines all the other 0x8x commands
+      FUNC_FLAG = LEFT_MASK;
+    }
+  } else if ( caddr == 2) {
+    // right
+    // the calibration address is in the high nibble
+    uint32_t offset = (addr & 0x70) >> 4;
+    if (offset >= 0 && offset < CAMEL_CAL_DATA_COUNT) {
+      CAL_OFFSET = offset << 3; // offset * 8
+      uint8_t *pos = CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET;
+      memcpy(pos, RxData + 1, 8);
+      FUNC_FLAG = RIGHT_MASK;
+    }
+  } else if ( caddr == 4 ) {
+    // calibration count
+    CAL_COUNT = RxData[1] & 0x0F;
+    FUNC_FLAG = COUNT_MASK;
+    // this function also saves both the count and config to EEPROM
+    // SCALES_CONFIG |= COUNT_MASK;
+  } else if ( addr == 0x80 ) {
+    // this is a request for calibration data, 8 bytes, or config/count, 2 bytes
+    // the cell and offset are encoded in the next byte
+
     rxmode = RxData[1];
-    break;
-  case 0x81:
-    // left scaling
-    rxmode = 1;
-    break;
-  case 0x82:
-    // right scaling
-    rxmode = 2;
-    break;
-  case 0x83:
-    // config
-    rxmode = 3;
-    break;
-  case 0x84:
-    // left, right and config
-    rxmode = 4;
-    break;
-  case 0x85:
-    // EEPROM size
-    rxmode = 5;
-    break;
-  case 0x86:
-    // EEPROM base address
-    rxmode = 6;
-    break;
+    // make sure we have valid codes
+    // Note that code 0, will simply result in sensor data
+    if ( (rxmode & 0x0F) > 6 ) {
+      rxmode = 0;
+    }
   }
 }
 
@@ -125,73 +105,74 @@ void HAL_I2C_ListenCpltCallback(I2C_HandleTypeDef *hi2c)
 
 void HAL_I2C_AddrCallback(I2C_HandleTypeDef *hi2c, uint8_t TransferDirection, uint16_t AddrMatchCode)
 {
-	if (TransferDirection == I2C_DIRECTION_TRANSMIT)  // if the master wants to transmit the data
+	if (TransferDirection == I2C_DIRECTION_TRANSMIT) // if the master wants to transmit the data
 	{
+		txcount = 0;
 		rxcount = 0;
 		// receive using sequential function.
 
 		// first byte is "register" address, rest up to 8 bytes of data depending on address
 		HAL_I2C_Slave_Sequential_Receive_IT(hi2c, RxData, 1, I2C_FIRST_FRAME);
-	}
-	else  // if the master requests the data from the slave
+	} else  // if the master requests the data from the slave
 	{
-	  switch(rxmode) {
-    case 1:
-      // left scaling
-      txcount = 4;
-      HAL_I2C_Slave_Seq_Transmit_IT(hi2c, EEPROM_DATA, txcount, I2C_FIRST_AND_LAST_FRAME);
-      // reset mode, only valid for one cycle
-      break;
-    case 2:
-      // right scaling
-      txcount = 4;
-      HAL_I2C_Slave_Seq_Transmit_IT(hi2c, EEPROM_DATA+4, txcount, I2C_FIRST_AND_LAST_FRAME);
-      // reset mode, only valid for one cycle
-      break;
-    case 3:
-      // send current configuration
-      txcount = 1;
-      TxData[0] = SCALES_CONFIG & 0xFF;
-      HAL_I2C_Slave_Seq_Transmit_IT(hi2c, TxData, txcount, I2C_FIRST_AND_LAST_FRAME);
-      // reset mode, only valid for one cycle
-      break;
-    case 4:
-      // left and right scalings and config
-      txcount = 9;
-      memcpy(TxData, EEPROM_DATA, 8);
-      TxData[8] = SCALES_CONFIG & 0xFF;
-      HAL_I2C_Slave_Seq_Transmit_IT(hi2c, TxData, txcount, I2C_FIRST_AND_LAST_FRAME);
-      // reset mode, only valid for one cycle
-      break;
-	  case 5:
-      uint16_t len = eeprom_length();
-      memcpy(TxData, &len, 2);
-      txcount = 2;
-      HAL_I2C_Slave_Seq_Transmit_IT(hi2c, TxData, txcount, I2C_FIRST_AND_LAST_FRAME);
-      break;
-	  case 6:
-      uint32_t base = eeprom_base_address();
-      memcpy(TxData, &base, 4);
-      txcount = 4;
-      HAL_I2C_Slave_Seq_Transmit_IT(hi2c, TxData, txcount, I2C_FIRST_AND_LAST_FRAME);
-      break;
-	  default:
-	    // If both cells are enabled, transmit the whole 6 bytes, left Cell first;
-	    // otherwise only transmit the 3 bytes of the enabled cell
-      txcount = 3;
-      startPosition = 0;
-      if (!leftCell.enabled && rightCell.enabled) {
-        startPosition = 3;
-      }
-      if (leftCell.enabled && rightCell.enabled) {
-        txcount = 6;
-      }
-      // transmit 3 or 6 bytes depending on whether both cells are enabled or only one
-      HAL_I2C_Slave_Seq_Transmit_IT(hi2c, SCALES_DATA + startPosition, txcount, I2C_FIRST_AND_LAST_FRAME);
-	  }
-	  // reset back to default function: sending the load cell values.
-	  // other functions are only set for one write/read transaction
-	  rxmode = 0;
+		txcount = 0;
+		uint8_t mode = rxmode & 0x0F;
+		uint32_t offset;
+		switch (mode) {
+		case 1:
+			// left calibration data
+			txcount = 8;
+			offset = (rxmode & 0xF0) >> 1; // ((rxmode & 0xF0) >> 4) << 3; // index * 8
+			HAL_I2C_Slave_Seq_Transmit_IT(hi2c, CAL_DATA + offset, txcount,
+					I2C_FIRST_AND_LAST_FRAME);
+			break;
+		case 2:
+			// right calibration data, right data starts at EEPROM_DATA + CAMEL_CAL_RIGHT_OFFSET
+			txcount = 8;
+			offset = (rxmode & 0xF0) >> 1; // ((rxmode & 0xF0) >> 4) << 3; // index * 8
+			HAL_I2C_Slave_Seq_Transmit_IT(hi2c, CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + offset, txcount,
+					I2C_FIRST_AND_LAST_FRAME);
+			break;
+		case 4:
+			// config and calibration count
+			txcount = 2;
+			TxData[0] = SCALES_CONFIG;
+			TxData[1] = CAL_COUNT;
+			HAL_I2C_Slave_Seq_Transmit_IT(hi2c, TxData, txcount,
+					I2C_FIRST_AND_LAST_FRAME);
+			break;
+		case 5:
+			uint16_t len = eeprom_length();
+			memcpy(TxData, &len, 2);
+			txcount = 2;
+			HAL_I2C_Slave_Seq_Transmit_IT(hi2c, TxData, txcount,
+					I2C_FIRST_AND_LAST_FRAME);
+			break;
+		case 6:
+			uint32_t base = eeprom_base_address();
+			memcpy(TxData, &base, 4);
+			txcount = 4;
+			HAL_I2C_Slave_Seq_Transmit_IT(hi2c, TxData, txcount,
+					I2C_FIRST_AND_LAST_FRAME);
+			break;
+		default:
+			// If both cells are enabled, transmit the whole 6 bytes, left Cell first;
+			// otherwise only transmit the 3 bytes of the enabled cell
+			txcount = 3;
+			startPosition = 0;
+			if (!leftCell.enabled && rightCell.enabled) {
+				startPosition = 3;
+			}
+			if (leftCell.enabled && rightCell.enabled) {
+				txcount = 6;
+			}
+			// transmit 3 or 6 bytes depending on whether both cells are enabled or only one
+			HAL_I2C_Slave_Seq_Transmit_IT(hi2c, SCALES_DATA + startPosition,
+					txcount, I2C_FIRST_AND_LAST_FRAME);
+		}
+		// reset back to default function: sending the load cell values.
+		// other functions are only set for one write/read transaction
+		rxmode = 0;
 	}
 }
 
@@ -199,50 +180,38 @@ void HAL_I2C_SlaveTxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
   /* nothing to do, we have sent right amount of data or host aborted before finish, getting an AF error
   */
+  txcount = 0;
 }
 
 
 void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
   // first byte is address to write to:
-  // 0: configuration
-  // 1: left cell scaling factor
-  // 2: right cell scaling factor
-  // 4: both left cell and right cell scaling factors (first 4 bytes for left cell)
+  // 0: configuration for left and right cells (no saving to EEPROM)
+  // 1: left cell calibration data (8 bytes) (saved to EEPROM)
+  // 2: right cell calibration data (8 bytes) (saved to EEPROM)
+  // 4: calibration count (saved to EEPROM together with configuration)
   if ( rxcount == 0 ) {
     // we just received the first byte (address)
     rxcount++;
-    switch (RxData[0]) {
-    case 0:
-      // configuration register
+    // mask the calibration address
+    uint8_t reg = RxData[0] & 0x8F;
+
+    if ( reg == 0 ) {
+      // configuration register (but do not save to EEPROM)
       HAL_I2C_Slave_Sequential_Receive_IT(hi2c, RxData + rxcount, 1, I2C_LAST_FRAME);
-      break;
-    case 1:
-      // note that this way, we don't know exactly where host stopped sending data if it sends less than expected
-      // left scaling factor storage
-      HAL_I2C_Slave_Sequential_Receive_IT(hi2c, EEPROM_DATA, 4, I2C_LAST_FRAME);
-      break;
-    case 2:
-      // right scaling factor storage
-      HAL_I2C_Slave_Sequential_Receive_IT(hi2c, EEPROM_DATA+4, 4, I2C_LAST_FRAME);
-      break;
-    case 4:
-      // left and right scaling factors storage
-      HAL_I2C_Slave_Sequential_Receive_IT(hi2c, EEPROM_DATA, 8, I2C_LAST_FRAME);
-      break;
-    // the following codes request other data from the device,
-    // by default a read sends load cell values, but the next codes switches read target for next read.
-    case 0x80:
-      // read one more byte indicating what to send in next read request
-      HAL_I2C_Slave_Sequential_Receive_IT(hi2c, RxData+rxcount, 1, I2C_LAST_FRAME);
-      break;
-    // the following are an alternative to 0x80 but encoded in the "register" address, so no need for a second byte
-    case 0x81:
-    case 0x82:
-    case 0x83:
-    case 0x84:
-    case 0x85:
-    case 0x86:
+    } else if ( reg == 1 || reg == 2) {
+      // left or right calibration data, offset encoded in first byte high nibble
+      HAL_I2C_Slave_Sequential_Receive_IT(hi2c, RxData + rxcount, 8, I2C_LAST_FRAME);
+    } else if ( reg == 4 ) {
+      // calibration count (also saves config to EEPROM)
+      HAL_I2C_Slave_Sequential_Receive_IT(hi2c, RxData + rxcount, 1, I2C_LAST_FRAME);
+    } else if ( reg >= 0x80 && reg <= 0x86 ) {
+      // these codes are for requesting other data to send,
+      // by default a read request sends the cells sensor data
+      // read one more byte indicating what to send in next read request (0x80)
+
+      // 0x81 - 0x86
       // try to read more data but ignore, host should stop transmission now and don't send anymore data,
       // this will cause AF error but it should be OK, we got what we need now. (process data will be handled in error handler).
       // Is there a way to send last frame condition without requesting more data?
@@ -250,8 +219,7 @@ void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c)
       // We need to read the first byte (register address) to know what to do next, but in case we don't need
       // more data, it's already too late to send stop from our side using the HAL API, or so it seems.
       HAL_I2C_Slave_Sequential_Receive_IT(hi2c, RxData+rxcount, 1, I2C_LAST_FRAME);
-      break;
-    default:
+    } else {
       // try to read more data but ignore, host should stop transmission now and don't send anymore data
       HAL_I2C_Slave_Sequential_Receive_IT(hi2c, RxData+rxcount, 1, I2C_LAST_FRAME);
     }

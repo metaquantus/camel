@@ -46,9 +46,11 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
+#include <stdio.h>
 #include "camel_i2c.h"
 #include "hx71x.h"
 #include "eeprom.h"
+#include "utils.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -72,22 +74,39 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
 // at reset both cells are enabled at 128 gain factor
 HX71x_TypeDef leftCell = { LEFT_DOUT_GPIO_Port, LEFT_DOUT_Pin, LEFT_SCK_GPIO_Port, LEFT_SCK_Pin, 1, 1, 0 };
 HX71x_TypeDef rightCell= { RIGHT_DOUT_GPIO_Port, RIGHT_DOUT_Pin, RIGHT_SCK_GPIO_Port, RIGHT_SCK_Pin, 1, 1, 0 };
 uint8_t SCALES_DATA[SCALES_DATA_SIZE] = { 0, 0, 0, 0, 0, 0 };
-uint16_t SCALES_CONFIG = 0;
-extern uint8_t EEPROM_DATA[EEPROM_DATA_SIZE];
+uint8_t SCALES_CONFIG = DEFAULT_CONFIG;
+uint8_t CAL_COUNT = 0;
+uint8_t CAL_OFFSET = 0;
+uint8_t FUNC_FLAG = 0;
+extern uint8_t CAL_DATA[CAMEL_CAL_DATA_SIZE];
+#ifdef CAMEL_UART
+uint8_t isSent = 1;
+uint8_t UART_TX_DATA[UART_TX_DATA_SIZE];
+#endif
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
+#ifdef CAMEL_UART
+static void MX_USART2_UART_Init(void);
+#endif
 /* USER CODE BEGIN PFP */
+void readConfig();
 void parseConfig();
+#ifdef CAMEL_UART
+char byteToHex(uint8_t b);
+#endif
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -125,103 +144,104 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_I2C1_Init();
+#ifdef CAMEL_UART
+  MX_USART2_UART_Init();
+#endif
   /* USER CODE BEGIN 2 */
   HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-  //  read config and scaling factors from EEPROM
-  uint32_t leftScale = eeprom_read_word(CAMEL_LEFT_EEPROM_START);
-  memcpy(EEPROM_DATA, &leftScale, 4);
-  uint32_t rightScale = eeprom_read_word(CAMEL_RIGHT_EEPROM_START);
-  memcpy(EEPROM_DATA+4, &rightScale, 4);
-  SCALES_CONFIG = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START) | 0x8000;
+  readConfig();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+	while (1) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    if ( (SCALES_CONFIG & 0xF000) != 0) {
-      parseConfig();
-      // report change
-      ledWaitCount = 0;
-      ledCount = 0;
-    }
-	  if ( leftCell.modified ) {
-		  if ( leftCell.enabled ) {
-			  HX71x_powerUp(&leftCell);
-		  } else {
-			  HX71x_powerDown(&leftCell);
-		  }
-		  leftCell.modified = 0;
-	  }
+		if ((FUNC_FLAG & (CONFIG_MASK | LEFT_MASK | RIGHT_MASK | COUNT_MASK))
+				!= 0) {
+			parseConfig();
+			// report change
+			ledWaitCount = 0;
+			ledCount = 0;
+		}
+		if (leftCell.modified) {
+			if (leftCell.enabled) {
+				HX71x_powerUp(&leftCell);
+			} else {
+				HX71x_powerDown(&leftCell);
+			}
+			leftCell.modified = 0;
+		}
 		if (rightCell.modified) {
 			if (rightCell.enabled) {
 				HX71x_powerUp(&rightCell);
 			} else {
 				HX71x_powerDown(&rightCell);
 			}
-      rightCell.modified = 0;
+			rightCell.modified = 0;
 		}
-		if ( ledWaitCount == 0 ) {
-		  HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+		if (ledWaitCount == 0) {
+			HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
 		}
 
 		// if both cells are enabled, wait for both to be ready
 		// and read them together, so next time they we'll be ready
 		// about the same time
-	  uint8_t leftReady = leftCell.enabled && HX71x_isReady(&leftCell) ;
-	  uint8_t rightReady = rightCell.enabled && HX71x_isReady(&rightCell);
+		uint8_t leftReady = leftCell.enabled && HX71x_isReady(&leftCell);
+		uint8_t rightReady = rightCell.enabled && HX71x_isReady(&rightCell);
 
-	  if ( ( leftCell.enabled && rightCell.enabled && leftReady && rightReady ) ||
-		   ( leftCell.enabled && !rightCell.enabled && leftReady ) ||
-		   ( !leftCell.enabled && rightCell.enabled && rightReady ) ) {
-		  HX71x_read(&leftCell, &rightCell);
-	  }
-	  // LED:
-	  // wait 2 seconds before lighting the LED to report config status
-	  // to give host time to initialize this board.
-	  // 1 pulse for leftCell enabled only,
-	  // 2 pulses for rightCell enabled only,
-	  // 3 pulses for both leftCell and rightCells enabled
-	  // We may get 3 pulses for the default configuration
-	  // if host didn't configured us quick enough.
-	  if ( ledWaitCount < LED_WAIT ) {
-	    ledWaitCount++;
-	  } else {
-	    if ( ledCount == 0 ) {
-	      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-	    } else if ( ledCount == LED_PERIOD ) {
-	      HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-	    }
-	    if ( rightCell.enabled ) {
-	      if ( ledCount == LED_PERIOD * 2 ) {
-	        HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-	      } else if ( ledCount == LED_PERIOD * 3 ) {
-	        HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-	      }
-	    }
-	    if ( leftCell.enabled && rightCell.enabled ) {
-        if (ledCount == LED_PERIOD * 4) {
-          HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
-        } else if (ledCount == LED_PERIOD * 5) {
-          HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
-        }
-	    }
-	    if ( ledCount < LED_PERIOD * 5 ) {
-	      ledCount++;
-	    }
-	  }
+		if ((leftCell.enabled && rightCell.enabled && leftReady && rightReady)
+				|| (leftCell.enabled && !rightCell.enabled && leftReady)
+				|| (!leftCell.enabled && rightCell.enabled && rightReady)) {
+			HX71x_read(&leftCell, &rightCell);
+		}
+		// LED:
+		// wait 2 seconds before lighting the LED to report config status
+		// to give host time to initialize this board.
+		// 1 pulse for leftCell enabled only,
+		// 2 pulses for rightCell enabled only,
+		// 3 pulses for both leftCell and rightCells enabled
+		// We may get 3 pulses for the default configuration
+		// if host didn't configured us quick enough.
+		if (ledWaitCount < LED_WAIT) {
+			ledWaitCount++;
+		} else {
+			if (leftCell.enabled || rightCell.enabled) {
+				if (ledCount == 0) {
+					HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+				} else if (ledCount == LED_PERIOD) {
+					HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+				}
+			}
+			if (rightCell.enabled) {
+				if (ledCount == LED_PERIOD * 2) {
+					HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+				} else if (ledCount == LED_PERIOD * 3) {
+					HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+				}
+			}
+			if (leftCell.enabled && rightCell.enabled) {
+				if (ledCount == LED_PERIOD * 4) {
+					HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+				} else if (ledCount == LED_PERIOD * 5) {
+					HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+				}
+			}
+			if (ledCount < LED_PERIOD * 5) {
+				ledCount++;
+			}
+		}
 
-	  // HX711 are setup at 10 samples per second (every 100ms)
-	  // conversion starts at end of the read,
-	  // we don't want to poll too often but enough to detect
-	  // conversion ready without loosing too much time
-	  // TODO: use external interrupt from DOUT lines to detect ready state.
-	  HAL_Delay(SCAN_FREQ);
-  }
+		// HX71x are setup at 10 samples per second (every 100ms)
+		// conversion starts at end of the read,
+		// we don't want to poll too often but enough to detect
+		// conversion ready without loosing too much time
+		// TODO: use external interrupt from DOUT lines to detect ready state.
+		HAL_Delay(SCAN_FREQ);
+	}
   /* USER CODE END 3 */
 }
 
@@ -267,7 +287,8 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_I2C1;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2|RCC_PERIPHCLK_I2C1;
+  PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
@@ -284,7 +305,7 @@ static void MX_I2C1_Init(void)
 {
 
   /* USER CODE BEGIN I2C1_Init 0 */
-
+  // hi2c1.Init.OwnAddress1 = CAMEL_ADDRESS << 1;
   /* USER CODE END I2C1_Init 0 */
 
   /* USER CODE BEGIN I2C1_Init 1 */
@@ -327,6 +348,59 @@ static void MX_I2C1_Init(void)
 }
 
 /**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+#ifdef CAMEL_UART
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
+
+}
+#endif
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel2_3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel2_3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel2_3_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -334,8 +408,8 @@ static void MX_I2C1_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
@@ -378,11 +452,73 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SCK2_GPIO_Port, &GPIO_InitStruct);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
+/*
+ * Read configuration and calibration data from EEPROM
+ */
+void readConfig(void) {
+  // 1st byte stores cells configuration, 2nd byte is calibration data point count sent by host
+  // we should keep the count and send it back when requested.
+  // we store also a CRC to validate EEPROM DATA
+  uint8_t config[2] = {0 , 0};
+  SCALES_CONFIG = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START);
+  CAL_COUNT = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START+1);
+  uint8_t scrc = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START+2);
+  config[0] = SCALES_CONFIG;
+  config[1] = CAL_COUNT;
+
+  uint8_t crc = gencrc(config, 2);
+  if ( crc != scrc ) {
+    // wrong CRC
+    // load default value
+    SCALES_CONFIG = DEFAULT_CONFIG;
+    CAL_COUNT = 0;
+  }
+
+  //sprintf((char *)UART_TX_DATA, "RC: %02X%02X\r\n", config[1], config[0]);
+#ifdef CAMEL_UART
+	if (isSent == 1) {
+		UART_TX_DATA[0] = 'R';
+		UART_TX_DATA[1] = 'C';
+		UART_TX_DATA[2] = ':';
+		UART_TX_DATA[3] = ' ';
+		UART_TX_DATA[4] = byteToHex(CAL_COUNT >> 4);
+		UART_TX_DATA[5] = byteToHex(CAL_COUNT & 0x0F);
+		UART_TX_DATA[6] = byteToHex(SCALES_CONFIG >> 4);
+		UART_TX_DATA[7] = byteToHex(SCALES_CONFIG & 0x0F);
+		UART_TX_DATA[8] = '\r';
+		UART_TX_DATA[9] = '\n';
+
+		HAL_UART_Transmit_DMA(&huart2, UART_TX_DATA, 10);
+		isSent = 0;
+	}
+#endif
+
+  FUNC_FLAG = CONFIG_MASK;
+
+
+  // EEPROM_DATA is a shadow in SRAM of EEPROM calibration data as EEPROM NVM is slower to read and write
+  // no check is done on data, the host should do the checking as format is host specific
+  // memcpy(EEPROM_DATA, (const void*) (DATA_EEPROM_BASE + CAMEL_EEPROM_START), EEPROM_DATA_SIZE);
+  // copy only valid data
+  if ( CAL_COUNT >= 0 && CAL_COUNT < CAMEL_CAL_DATA_COUNT ) {
+    for(size_t i=0; i<CAL_COUNT; i++) {
+      uint32_t offset = i << 3; // i * 8
+      uint32_t value = eeprom_read_word(CAMEL_LEFT_EEPROM_START + offset);
+      memcpy(CAL_DATA + offset, &value, 4);
+      value = eeprom_read_word(CAMEL_LEFT_EEPROM_START + offset + 4);
+      memcpy(CAL_DATA + offset + 4, &value, 4);
+      value = eeprom_read_word(CAMEL_RIGHT_EEPROM_START + offset);
+      memcpy(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + offset, &value, 4);
+      value = eeprom_read_word(CAMEL_RIGHT_EEPROM_START + offset + 4);
+      memcpy(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + offset + 4, &value, 4);
+    }
+  }
+}
 /*
    Parse the configuration data sent from the host and
    set the parameters for next conversion or power down an HX711.
@@ -395,12 +531,11 @@ static void MX_GPIO_Init(void)
    bit 2 sets sampling rate for HX712: 0 for 10Hz or 1 for 40Hz
    e.g: 0x33 enables both cells at 128 gain factor for HX711 or 256 gain factor at 10Hz for HX712
 
-   MS nibble encodes function: 0xF for config parsing, 0x4 for left scale store, 0x2 for right store, and 0x6 for both scales and config store.
-
    If the enable bit is changed from previous value, then the modified state is also set to let the main
    loop know and do the job.
  */
 void parseConfig(void) {
+  /*
   if ((SCALES_CONFIG & 0x6000) == 0x6000 ) {
     eeprom_write_word(CAMEL_LEFT_EEPROM_START, (uint32_t) * (uint32_t *)EEPROM_DATA);
     eeprom_write_word(CAMEL_RIGHT_EEPROM_START, (uint32_t) * (uint32_t *)(EEPROM_DATA+4));
@@ -410,7 +545,68 @@ void parseConfig(void) {
   } else if ((SCALES_CONFIG & 0x2000) != 0) {
     eeprom_write_word(CAMEL_RIGHT_EEPROM_START, (uint32_t) * (uint32_t *)(EEPROM_DATA+4));
   }
-  if ((SCALES_CONFIG & 0x8000) != 0) {
+  */
+	if ((FUNC_FLAG & LEFT_MASK) != 0) {
+		eeprom_write_word(CAMEL_LEFT_EEPROM_START + CAL_OFFSET,
+				(uint32_t) *(uint32_t*) (CAL_DATA + CAL_OFFSET));
+		eeprom_write_word(CAMEL_LEFT_EEPROM_START + CAL_OFFSET + 4,
+				(uint32_t) *(uint32_t*) (CAL_DATA + CAL_OFFSET + 4));
+		// SCALES_CONFIG &= 0xFFFF;
+	} else if ((FUNC_FLAG & RIGHT_MASK) != 0) {
+		eeprom_write_word(CAMEL_RIGHT_EEPROM_START + CAL_OFFSET,
+				(uint32_t) *(uint32_t*) (CAL_DATA + CAMEL_CAL_RIGHT_OFFSET
+						+ CAL_OFFSET));
+		eeprom_write_word(CAMEL_RIGHT_EEPROM_START + CAL_OFFSET + 4,
+				(uint32_t) *(uint32_t*) (CAL_DATA + CAMEL_CAL_RIGHT_OFFSET
+						+ CAL_OFFSET + 4));
+		// SCALES_CONFIG &= 0xFFFF;
+	} else if ((FUNC_FLAG & COUNT_MASK) != 0) {
+		uint8_t config[2] = { 0, 0 };
+		config[0] = SCALES_CONFIG;
+		config[1] = CAL_COUNT;
+		uint8_t crc = gencrc(config, 2);
+		eeprom_write_byte(CAMEL_CONFIG_EEPROM_START, SCALES_CONFIG);
+		eeprom_write_byte(CAMEL_CONFIG_EEPROM_START + 1, CAL_COUNT);
+		eeprom_write_byte(CAMEL_CONFIG_EEPROM_START + 2, crc);
+		// SCALES_CONFIG &= 0xFFFF;
+#ifdef CAMEL_UART
+		if (isSent == 1) {
+			UART_TX_DATA[0] = 'C';
+			UART_TX_DATA[1] = 'C';
+			UART_TX_DATA[2] = ':';
+			UART_TX_DATA[3] = ' ';
+			UART_TX_DATA[4] = byteToHex(crc >> 4);
+			UART_TX_DATA[5] = byteToHex(crc & 0x0F);
+			UART_TX_DATA[6] = ' ';
+			UART_TX_DATA[7] = byteToHex(CAL_COUNT >> 4);
+			UART_TX_DATA[8] = byteToHex(CAL_COUNT & 0x0F);
+			UART_TX_DATA[9] = ' ';
+			UART_TX_DATA[10] = byteToHex(SCALES_CONFIG >> 4);
+			UART_TX_DATA[11] = byteToHex(SCALES_CONFIG & 0x0F);
+			UART_TX_DATA[12] = '\r';
+			UART_TX_DATA[13] = '\n';
+
+			HAL_UART_Transmit_DMA(&huart2, UART_TX_DATA, 14);
+			isSent = 0;
+		}
+#endif
+	}
+  if ((FUNC_FLAG & CONFIG_MASK) != 0) {
+#ifdef CAMEL_UART
+		if (isSent == 1) {
+			UART_TX_DATA[0] = 'C';
+			UART_TX_DATA[1] = '0';
+			UART_TX_DATA[2] = ':';
+			UART_TX_DATA[3] = ' ';
+			UART_TX_DATA[4] = byteToHex(SCALES_CONFIG >> 4);
+			UART_TX_DATA[5] = byteToHex(SCALES_CONFIG & 0x0F);
+			UART_TX_DATA[6] = '\r';
+			UART_TX_DATA[7] = '\n';
+
+			HAL_UART_Transmit_DMA(&huart2, UART_TX_DATA, 8);
+			isSent = 0;
+		}
+#endif
 #ifdef CAMEL1
     // HX711
     // left cell gain
@@ -427,7 +623,7 @@ void parseConfig(void) {
     }
 #else
   // HX712 CAMEL2
-  uint16_t c = (SCALES_CONFIG >> 5) & 0x03;
+  uint8_t c = (SCALES_CONFIG >> 5) & 0x03;
   switch (c) {
   case 0:
     leftCell.GAIN = 1; // 128/10Hz
@@ -484,8 +680,26 @@ void parseConfig(void) {
       }
     }
   }
-  SCALES_CONFIG &= 0x00FF;
+  FUNC_FLAG = 0;
 }
+
+#ifdef CAMEL_UART
+char byteToHex(uint8_t b) {
+	b = b & 0x0f;
+	if ( b > 9 ) {
+		return 'A' + ((b & 0x0f) - 10);
+	} else {
+		return '0' + (b & 0x0f);
+	}
+}
+#endif
+
+#ifdef CAMEL_UART
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+	isSent = 1;
+}
+#endif
 
 /* USER CODE END 4 */
 

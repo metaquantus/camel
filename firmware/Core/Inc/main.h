@@ -70,12 +70,20 @@ void Error_Handler(void);
 #define SCK2_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
-// HX711 has 24bit resolution, times 2 cells
+#ifdef CAMEL_UART
+#define UART_TX_DATA_SIZE 16
+#endif
+// HX71x has 24bit resolution, times 2 cells
 // first 3 bytes for leftCell, last 3 bytes for rightCell
 #define SCALES_DATA_SIZE 6
+#define CONFIG_MASK 0x80
+#define LEFT_MASK   0x40
+#define RIGHT_MASK  0x20
+#define COUNT_MASK  0x10
+
 
 #ifdef CAMEL1
-
+#define DEFAULT_CONFIG 0x33
 #define LEFT_SCK_Pin        SCK2_Pin
 #define LEFT_SCK_GPIO_Port  SCK2_GPIO_Port
 #define LEFT_DOUT_Pin       DOUT2_Pin
@@ -87,7 +95,8 @@ void Error_Handler(void);
 #define RIGHT_SCK_GPIO_Port  SCK1_GPIO_Port
 
 #else
-
+#define DEFAULT_CONFIG 0x11
+// cells are reversed in PCB rev 2 to optimise layout
 #define LEFT_SCK_Pin        SCK1_Pin
 #define LEFT_SCK_GPIO_Port  SCK1_GPIO_Port
 #define LEFT_DOUT_Pin       DOUT1_Pin

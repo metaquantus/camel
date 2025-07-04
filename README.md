@@ -1,6 +1,6 @@
 # Camel I2C Dual HX712 Weigh Scales Board
 
-Camel is a board with Dual HX712 Weigh Scales ADCs controlled by a low power STM32L010F4 MCU providing an I2C slave interface.
+Camel is a board with Dual HX712 Weigh Scales ADCs controlled by a low power STM32L010F4 or STM32L031F6 MCU providing an I2C slave interface.
 Power is provided by an I2C Adafruit STEMMA compatible 4-pin JST PH (2mm pitch) connector. This board will work 
 with power from 3.3V to 5V, but it's better if VCC > 4V. 
 
@@ -17,7 +17,10 @@ STEMMA Pinouts:
 The MCU drives the 2 HX712 ADCs, reads and decodes the conversions and provides the raw data to the host via I2C. 
 The HX712s allow programmatic configuration of the sampling rate (10Hz or 40Hz), the amplifier's gain
 factor (128 or 256) and whether to put the HX712s into power down mode consuming less than 1uA.
+The device can also store configuration and calibration points in the MCU's EEPROM. Up to 4 calibration points 
+are supported. 
 The host is in charge of providing additional functions like scaling to weight units, tare and calibration.
+It may be possible to offload scaling to the MCU, if using STM32L031F6 as it has more memory.
 I2C doesn't support slave initiated transfers so the host MCU must poll the device periodically to read the data.
 There will be roughly one new sensor reading available of both load cells every 100ms if 10Hz sampling rate is used. 
 The internal oscillator is used in both the HX712 ADCs and the MCU so sampling rates are not very precise.
@@ -33,6 +36,15 @@ the host.
 
 Programming is done via a Serial Wire Debug (SWD) connector. Both a Tag-Connect TC2030-NL and a 4-pin 2.54mm pitch header are provided for SWD.
 
+A USART connector is provided but the STM32L010F4 has only 16Kb flash/2Kb RAM and adding code support exceeds code size limit. Some reporting
+was tried but code size was very tight. This was intended for monitor and debugging during development, so it's not essential. Maybe with the
+STM32L031F6 with 32KB flash/8KB RAM more monitoring and functions like standalone calibration can be added.
+
 ESD protection diodes were added to the interface connectors.
 
 2.54mm pitch header THT pads are used for the load cell connectors, but normally the load cells wires should be soldered directly to the pads instead of using headers or other connector.
+
+## PCB Notes
+
+The variable FAB\_ON\_PLACEHOLDER should be set to JLCJLCJLCJLC, WayWayWay or whatever string is specified by the Fab to position the order number.
+Or removed altogether if so desired. Sometimes a fee is incurred if removed.

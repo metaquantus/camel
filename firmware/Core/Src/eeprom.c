@@ -7,7 +7,8 @@
 
 #include <eeprom.h>
 
-uint8_t EEPROM_DATA[EEPROM_DATA_SIZE];
+// cache
+uint8_t CAL_DATA[CAMEL_CAL_DATA_SIZE];
 
 uint16_t eeprom_length() {
   return DATA_EEPROM_END - DATA_EEPROM_BASE + 1;
@@ -80,6 +81,7 @@ void eeprom_write_word(const uint32_t pos, const uint32_t value)
   {
     if (HAL_FLASHEx_DATAEEPROM_Unlock() == HAL_OK)
     {
+      // HAL_FLASHEx_DATAEEPROM_Erase(pos + DATA_EEPROM_BASE);
       HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, (pos + DATA_EEPROM_BASE), value);
       HAL_FLASHEx_DATAEEPROM_Lock();
     }
