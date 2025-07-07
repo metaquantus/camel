@@ -263,7 +263,16 @@
     "equivalence_files": []
   },
   "erc": {
-    "erc_exclusions": [],
+    "erc_exclusions": [
+      [
+        "lib_symbol_mismatch|1676400|990600|de050cec-b869-494d-bd72-47e752f2cc9c|00000000-0000-0000-0000-000000000000|||",
+        ""
+      ],
+      [
+        "pin_not_driven|1549400|1016000|a4ad53a6-97f7-456c-beeb-b2198a775719|00000000-0000-0000-0000-000000000000|/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0|/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0|",
+        ""
+      ]
+    ],
     "meta": {
       "version": 0
     },
@@ -552,7 +561,7 @@
       "fields_ordered": [
         {
           "group_by": false,
-          "label": "Reference",
+          "label": "Designator",
           "name": "Reference",
           "show": true
         },
@@ -600,7 +609,7 @@
         },
         {
           "group_by": false,
-          "label": "LCSC",
+          "label": " LCSC PN",
           "name": "LCSC",
           "show": true
         },
@@ -624,7 +633,7 @@
         },
         {
           "group_by": false,
-          "label": "PKG",
+          "label": "Package",
           "name": "PKG",
           "show": true
         },
@@ -644,6 +653,12 @@
           "group_by": false,
           "label": "Package",
           "name": "Package",
+          "show": false
+        },
+        {
+          "group_by": false,
+          "label": "Sim.Pin",
+          "name": "Sim.Pin",
           "show": false
         }
       ],
@@ -701,6 +716,7 @@
     ]
   ],
   "text_variables": {
+    "CAMEL_VERSION": "3.0",
     "FAB_ON_PLACEHOLDER": "JLCJLCJLCJLC"
   }
 }
