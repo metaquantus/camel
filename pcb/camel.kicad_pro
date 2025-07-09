@@ -248,11 +248,11 @@
       "zones_allow_external_fillets": false
     },
     "ipc2581": {
-      "dist": "",
-      "distpn": "",
+      "dist": "LCSC",
+      "distpn": "LCSC",
       "internal_id": "",
-      "mfg": "",
-      "mpn": ""
+      "mfg": "MANUFACTURER",
+      "mpn": "MFRN"
     },
     "layer_pairs": [],
     "layer_presets": [],
@@ -263,16 +263,7 @@
     "equivalence_files": []
   },
   "erc": {
-    "erc_exclusions": [
-      [
-        "lib_symbol_mismatch|1676400|990600|de050cec-b869-494d-bd72-47e752f2cc9c|00000000-0000-0000-0000-000000000000|||",
-        ""
-      ],
-      [
-        "pin_not_driven|1549400|1016000|a4ad53a6-97f7-456c-beeb-b2198a775719|00000000-0000-0000-0000-000000000000|/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0|/7aafcc7f-ce5d-4550-bc0a-3b0618a91db0|",
-        ""
-      ]
-    ],
+    "erc_exclusions": [],
     "meta": {
       "version": 0
     },

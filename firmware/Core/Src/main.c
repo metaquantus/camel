@@ -74,23 +74,52 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+#ifdef CAMEL_UART
 UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart2_tx;
-
+#endif
 /* USER CODE BEGIN PV */
 // at reset both cells are enabled at 128 gain factor
 HX71x_TypeDef leftCell = { LEFT_DOUT_GPIO_Port, LEFT_DOUT_Pin, LEFT_SCK_GPIO_Port, LEFT_SCK_Pin, 1, 1, 0 };
 HX71x_TypeDef rightCell= { RIGHT_DOUT_GPIO_Port, RIGHT_DOUT_Pin, RIGHT_SCK_GPIO_Port, RIGHT_SCK_Pin, 1, 1, 0 };
 uint8_t SCALES_DATA[SCALES_DATA_SIZE] = { 0, 0, 0, 0, 0, 0 };
+// encoded left/right cell configuration (sampling period and gain factor)
 uint8_t SCALES_CONFIG = DEFAULT_CONFIG;
+// number of calibration points
 uint8_t CAL_COUNT = 0;
+// next calibration point offset to read or write
 uint8_t CAL_OFFSET = 0;
+// flag indicating next function to perform
 uint8_t FUNC_FLAG = 0;
 extern uint8_t CAL_DATA[CAMEL_CAL_DATA_SIZE];
 #ifdef CAMEL_UART
 uint8_t isSent = 1;
 uint8_t UART_TX_DATA[UART_TX_DATA_SIZE];
 #endif
+// calibrated scaled value
+float SCALES_VALUE = 0.0;
+// tare offsets
+long LEFT_TARE_OFFSET = 0;
+long RIGHT_TARE_OFFSET = 0;
+// 0: left/right raw values, 1: calibrated scaled value, 2: left/right raw values and calibrated value
+uint8_t READ_VALUE_MODE = 0;
+// number of times to repeat the tare reads and average
+// tare function activated when TARE_TIMES > 0
+uint8_t TARE_TIMES = 0;
+// current tare read index
+uint8_t TARE_INDEX = 0;
+// number of times to repeat the left calibration reads and average
+uint8_t LEFT_CAL_TIMES = 0;
+// current left calibration read index
+uint8_t LEFT_CAL_INDEX = 0;
+// the new left calibration value
+float LEFT_CAL_VALUE = 0;
+// number of times to repeat the right calibration reads and average
+uint8_t RIGHT_CAL_TIMES = 0;
+// current right calibration read index
+uint8_t RIGHT_CAL_INDEX = 0;
+// the new right calibration value to store
+float RIGHT_CAL_VALUE = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -160,8 +189,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		if ((FUNC_FLAG & (CONFIG_MASK | LEFT_MASK | RIGHT_MASK | COUNT_MASK))
-				!= 0) {
+		if ((FUNC_FLAG & (CONFIG_MASK | LEFT_MASK | RIGHT_MASK | COUNT_MASK)) != 0) {
 			parseConfig();
 			// report change
 			ledWaitCount = 0;
@@ -464,20 +492,28 @@ void readConfig(void) {
   // 1st byte stores cells configuration, 2nd byte is calibration data point count sent by host
   // we should keep the count and send it back when requested.
   // we store also a CRC to validate EEPROM DATA
-  uint8_t config[2] = {0 , 0};
+  uint8_t config[3] = {0 , 0, 0};
   SCALES_CONFIG = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START);
   CAL_COUNT = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START+1);
-  uint8_t scrc = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START+2);
+  READ_VALUE_MODE = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START+2);
+  uint8_t scrc = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START+3);
   config[0] = SCALES_CONFIG;
   config[1] = CAL_COUNT;
+  config[2] = READ_VALUE_MODE;
 
-  uint8_t crc = gencrc(config, 2);
+  uint8_t crc = gencrc(config, 3);
   if ( crc != scrc ) {
     // wrong CRC
     // load default value
     SCALES_CONFIG = DEFAULT_CONFIG;
     CAL_COUNT = 0;
+    READ_VALUE_MODE = 0;
   }
+  TARE_TIMES = 0;
+  LEFT_CAL_TIMES = 0;
+  RIGHT_CAL_TIMES = 0;
+  LEFT_TARE_OFFSET = 0;
+  RIGHT_TARE_OFFSET = 0;
 
   //sprintf((char *)UART_TX_DATA, "RC: %02X%02X\r\n", config[1], config[0]);
 #ifdef CAMEL_UART
@@ -535,17 +571,6 @@ void readConfig(void) {
    loop know and do the job.
  */
 void parseConfig(void) {
-  /*
-  if ((SCALES_CONFIG & 0x6000) == 0x6000 ) {
-    eeprom_write_word(CAMEL_LEFT_EEPROM_START, (uint32_t) * (uint32_t *)EEPROM_DATA);
-    eeprom_write_word(CAMEL_RIGHT_EEPROM_START, (uint32_t) * (uint32_t *)(EEPROM_DATA+4));
-    eeprom_write_byte(CAMEL_CONFIG_EEPROM_START, (uint8_t) (SCALES_CONFIG & 0xFF) );
-  } else if ( (SCALES_CONFIG & 0x4000) != 0 ) {
-    eeprom_write_word(CAMEL_LEFT_EEPROM_START, (uint32_t) * (uint32_t *)EEPROM_DATA);
-  } else if ((SCALES_CONFIG & 0x2000) != 0) {
-    eeprom_write_word(CAMEL_RIGHT_EEPROM_START, (uint32_t) * (uint32_t *)(EEPROM_DATA+4));
-  }
-  */
 	if ((FUNC_FLAG & LEFT_MASK) != 0) {
 		eeprom_write_word(CAMEL_LEFT_EEPROM_START + CAL_OFFSET,
 				(uint32_t) *(uint32_t*) (CAL_DATA + CAL_OFFSET));
@@ -561,13 +586,15 @@ void parseConfig(void) {
 						+ CAL_OFFSET + 4));
 		// SCALES_CONFIG &= 0xFFFF;
 	} else if ((FUNC_FLAG & COUNT_MASK) != 0) {
-		uint8_t config[2] = { 0, 0 };
+		uint8_t config[3] = { 0, 0, 0 };
 		config[0] = SCALES_CONFIG;
 		config[1] = CAL_COUNT;
-		uint8_t crc = gencrc(config, 2);
+		config[2] = READ_VALUE_MODE;
+		uint8_t crc = gencrc(config, 3);
 		eeprom_write_byte(CAMEL_CONFIG_EEPROM_START, SCALES_CONFIG);
 		eeprom_write_byte(CAMEL_CONFIG_EEPROM_START + 1, CAL_COUNT);
-		eeprom_write_byte(CAMEL_CONFIG_EEPROM_START + 2, crc);
+		eeprom_write_byte(CAMEL_CONFIG_EEPROM_START + 2, READ_VALUE_MODE);
+		eeprom_write_byte(CAMEL_CONFIG_EEPROM_START + 3, crc);
 		// SCALES_CONFIG &= 0xFFFF;
 #ifdef CAMEL_UART
 		if (isSent == 1) {
@@ -680,6 +707,8 @@ void parseConfig(void) {
       }
     }
   }
+  // nothing to do for TARE_MASK
+
   FUNC_FLAG = 0;
 }
 

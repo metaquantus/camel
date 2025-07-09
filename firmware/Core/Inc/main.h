@@ -77,9 +77,15 @@ void Error_Handler(void);
 // first 3 bytes for leftCell, last 3 bytes for rightCell
 #define SCALES_DATA_SIZE 6
 #define CONFIG_MASK 0x80
+// external calibration read or save values only
 #define LEFT_MASK   0x40
 #define RIGHT_MASK  0x20
 #define COUNT_MASK  0x10
+// local tare
+#define TARE_MASK   0x08
+// local calibration and save values
+#define CAL_LEFT_MASK  0x04
+#define CAL_RIGHT_MASK 0x02
 
 
 #ifdef CAMEL1

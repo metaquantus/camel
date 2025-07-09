@@ -21,8 +21,9 @@
  * hold 4 bytes for a floating point scale factor value, a 3 bytes load cell value
  * and 1 byte for CRC. The calibration data is not checked, is simply stored and loaded
  * and passed to the host as is.
- * 4 additional bytes are reserved to store cell configuration, currently we only need
- * 1 byte for the configuration data, 1 byte for the calibration count and 1 byte for the CRC.
+ * 4 additional bytes are reserved to store cell configuration,
+ * 1 byte for the configuration data, 1 byte for the calibration count,
+ * 1 byte for the read value mode and 1 byte for a CRC.
  *
  * Note that this MCU only has 128 bytes of EEPROM, which fits our 68 bytes.
  * However, it's possible to use the program flash memory for this purpose as well,
@@ -42,6 +43,7 @@
 #define CAMEL_CAL_DATA_SIZE       64
 #define CAMEL_CAL_RIGHT_OFFSET    32
 #endif
+#define CAMEL_CAL_POINT_SIZE      8
 #define CAMEL_EEPROM_SIZE         (CAMEL_CAL_DATA_SIZE + 4)
 #define CAMEL_EEPROM_START        (DATA_EEPROM_END - DATA_EEPROM_BASE - CAMEL_EEPROM_SIZE + 1)
 #define CAMEL_LEFT_EEPROM_START   CAMEL_EEPROM_START
