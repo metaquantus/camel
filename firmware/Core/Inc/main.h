@@ -7,7 +7,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2024 STMicroelectronics.
+  * Copyright (c) 2025 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -41,7 +41,9 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-
+#define CAMEL_VERSION "3.0"
+#define CAMEL_VERSION_STRING "\r\nCamel Dual HX712 Weigh Scales ADC\r\nVersion: 3.0"
+#define CAMEL_VERSION_STRING_LEN 49
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -70,9 +72,6 @@ void Error_Handler(void);
 #define SCK2_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
-#ifdef CAMEL_UART
-#define UART_TX_DATA_SIZE 16
-#endif
 // HX71x has 24bit resolution, times 2 cells
 // first 3 bytes for leftCell, last 3 bytes for rightCell
 #define SCALES_DATA_SIZE 6
@@ -86,7 +85,6 @@ void Error_Handler(void);
 // local calibration and save values
 #define CAL_LEFT_MASK  0x04
 #define CAL_RIGHT_MASK 0x02
-
 
 #ifdef CAMEL1
 #define DEFAULT_CONFIG 0x33
@@ -102,7 +100,7 @@ void Error_Handler(void);
 
 #else
 #define DEFAULT_CONFIG 0x11
-// cells are reversed in PCB rev 2 to optimise layout
+// cells are reversed in PCB rev 2+ to optimise layout
 #define LEFT_SCK_Pin        SCK1_Pin
 #define LEFT_SCK_GPIO_Port  SCK1_GPIO_Port
 #define LEFT_DOUT_Pin       DOUT1_Pin
@@ -114,7 +112,6 @@ void Error_Handler(void);
 #define RIGHT_SCK_GPIO_Port  SCK2_GPIO_Port
 
 #endif
-
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

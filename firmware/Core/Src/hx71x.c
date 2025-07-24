@@ -22,6 +22,7 @@
  * There's the issue of the read routine being interrupted and the risk of the HX711s getting power down while servicing the ISR,
  * since we have the I2C subsystem using interrupt mode. However, we assume the I2C IRQ handlers don't take more than 60us.
  */
+extern CRC_HandleTypeDef hcrc;
 
 extern uint8_t FUNC_FLAG;
 extern uint8_t SCALES_DATA[SCALES_DATA_SIZE];
@@ -154,7 +155,7 @@ void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 			}
 			// value may be negative depending on how the cell is mechanically connected (bending in opposite direction)
 			if ( value >= 0) {
-				if ( value >= cvalue) {
+				if ( value <=  cvalue) {
 					break;
 				}
 			} else {
@@ -174,8 +175,8 @@ void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 		}
 		// compute value
 		lvalue = (value - LEFT_TARE_OFFSET) * leftScale;
-#ifdef CAMEL_LOCAL_CAL
-		// compute new scale if in calibration mode
+#ifdef CAMEL_LOCAL_CALIBRATION
+		// compute new left scale factor if in calibration mode
 		if ( LEFT_CAL_TIMES > 0 ) {
 
 			float scale = leftScale;
@@ -197,8 +198,8 @@ void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 					pvalue |= 0xFF000000;
 				}
 				// get the index - 1 (previous) scale factor
-				float pscale;
-				memcpy(&pscale, CAL_DATA + CAL_OFFSET - CAMEL_CAL_POINT_SIZE, 4);
+				float pscale = * (float *)(CAL_DATA + CAL_OFFSET - CAMEL_CAL_POINT_SIZE);
+				// memcpy(&pscale, CAL_DATA + CAL_OFFSET - CAMEL_CAL_POINT_SIZE, 4);
 				// average raw values
 				value = (cvalue + value) / 2;
 				// compute index - 1 (previous, less weight) calibrated value
@@ -207,11 +208,12 @@ void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 				// which is the slope of the line segment from previous calibration point to current point
 				scale = (LEFT_CAL_VALUE - w0) / (value - pvalue);
 			}
-			memcpy(CAL_DATA + CAL_OFFSET, &scale, 4);
+			// memcpy(CAL_DATA + CAL_OFFSET, &scale, 4);
+			* (float *)(CAL_DATA + CAL_OFFSET) = scale;
 			CAL_DATA[CAL_OFFSET + 4] = value & 0xFF;
 			CAL_DATA[CAL_OFFSET + 5] = (value >> 8) & 0xFF;
 			CAL_DATA[CAL_OFFSET + 6] = (value >> 16) & 0xFF;
-			CAL_DATA[CAL_OFFSET + 7] = gencrc(CAL_DATA + CAL_OFFSET, 7); // CRC-8
+			CAL_DATA[CAL_OFFSET + 7] = GENCRC(CAL_DATA + CAL_OFFSET, 7); // CRC-8
 		}
 #endif
 	}
@@ -228,7 +230,7 @@ void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 				cvalue |= 0xFF000000;
 			}
 			if (value >= 0) {
-				if (value >= cvalue) {
+				if (value <= cvalue) {
 					break;
 				}
 			} else {
@@ -247,7 +249,7 @@ void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 		}
 
 		rvalue = (value - RIGHT_TARE_OFFSET) * rightScale;
-#ifdef CAMEL_LOCAL_CAL
+#ifdef CAMEL_LOCAL_CALIBRATION
 		if (RIGHT_CAL_TIMES > 0) {
 
 			float scale = rightScale;
@@ -269,8 +271,8 @@ void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 					pvalue |= 0xFF000000;
 				}
 				// get the index - 1 (previous) scale factor
-				float pscale;
-				memcpy(&pscale, CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET - CAMEL_CAL_POINT_SIZE, 4);
+				float pscale = * (float *) (CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET - CAMEL_CAL_POINT_SIZE);
+				// memcpy(&pscale, CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET - CAMEL_CAL_POINT_SIZE, 4);
 				// average raw values
 				value = (cvalue + value) / 2;
 				// compute index - 1 (previous, less weight) calibrated value
@@ -279,11 +281,12 @@ void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 				// which is the slope of the line segment from previous calibration point to current point
 				scale = (RIGHT_CAL_VALUE - w0) / (value - pvalue);
 			}
-			memcpy(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET, &scale, 4);
+			// memcpy(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET, &scale, 4);
+			* (float *) (CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET) = scale;
 			CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 4] = value & 0xFF;
 			CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 5] = (value >> 8) & 0xFF;
 			CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 6] = (value >> 16) & 0xFF;
-			CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 7] = gencrc(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET, 7); // CRC-8
+			CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 7] = GENCRC(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET, 7); // CRC-8
 		}
 #endif
 	}

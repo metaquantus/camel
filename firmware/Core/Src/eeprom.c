@@ -59,7 +59,7 @@ uint32_t eeprom_read_word(const uint32_t pos)
 #if defined(DATA_EEPROM_BASE)
   __IO uint32_t data = 0;
 
-  if (pos <= (DATA_EEPROM_END - DATA_EEPROM_BASE))
+  if (pos <= (DATA_EEPROM_END - DATA_EEPROM_BASE - 4))
   {
     /* with actual EEPROM, pos is a relative address */
     data = *(__IO uint32_t *)(DATA_EEPROM_BASE + pos);
@@ -77,7 +77,7 @@ void eeprom_write_word(const uint32_t pos, const uint32_t value)
 #if defined(DATA_EEPROM_BASE)
 
   /* with actual EEPROM, pos is a relative address */
-  if (pos <= (DATA_EEPROM_END - DATA_EEPROM_BASE))
+  if (pos <= (DATA_EEPROM_END - DATA_EEPROM_BASE - 4))
   {
     if (HAL_FLASHEx_DATAEEPROM_Unlock() == HAL_OK)
     {

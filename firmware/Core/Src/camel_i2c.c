@@ -91,16 +91,16 @@ void process_data (void)
       memcpy(pos, RxData + 1, 8);
       FUNC_FLAG = RIGHT_MASK;
     }
-  } else if ( caddr == 4 ) {
+  } else if (caddr == 4) {
     // calibration count and read mode
     CAL_COUNT = RxData[1] & 0x0F;
-    if ( CAL_COUNT > CAMEL_CAL_DATA_COUNT ) {
-    	CAL_COUNT = 0;
+    if (CAL_COUNT > CAMEL_CAL_DATA_COUNT) {
+      CAL_COUNT = 0;
     }
     READ_VALUE_MODE = (RxData[1] >> 4) & 0x03; // 0, 1 or 2
     if (READ_VALUE_MODE > 2) {
-    	READ_VALUE_MODE = 0;
-	}
+      READ_VALUE_MODE = 0;
+    }
     FUNC_FLAG = COUNT_MASK;
     // this function also saves both the count, mode and config to EEPROM
     // SCALES_CONFIG |= COUNT_MASK;
