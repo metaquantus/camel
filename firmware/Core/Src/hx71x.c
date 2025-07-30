@@ -25,27 +25,107 @@
 extern CRC_HandleTypeDef hcrc;
 
 extern uint8_t FUNC_FLAG;
-extern uint8_t SCALES_DATA[SCALES_DATA_SIZE];
-extern uint8_t CAL_COUNT;
-extern uint8_t CAL_OFFSET;
-extern uint8_t CAL_DATA[CAMEL_CAL_DATA_SIZE];
-extern uint8_t TARE_TIMES;
-extern uint8_t TARE_INDEX;
-extern uint8_t LEFT_CAL_TIMES;
-extern uint8_t LEFT_CAL_INDEX;
-extern uint8_t RIGHT_CAL_TIMES;
-extern uint8_t RIGHT_CAL_INDEX;
-extern float SCALES_VALUE;
-extern float LEFT_CAL_VALUE;
-extern float RIGHT_CAL_VALUE;
-extern long LEFT_TARE_OFFSET;
-extern long RIGHT_TARE_OFFSET;
 
+uint8_t CAL_COUNT;
+uint8_t CAL_OFFSET;
+uint8_t TARE_TIMES;
+uint8_t TARE_INDEX;
+uint8_t LEFT_CAL_TIMES;
+uint8_t LEFT_CAL_INDEX;
+uint8_t RIGHT_CAL_TIMES;
+uint8_t RIGHT_CAL_INDEX;
+float SCALES_VALUE;
+float LEFT_CAL_VALUE;
+float RIGHT_CAL_VALUE;
+long LEFT_TARE_OFFSET;
+long RIGHT_TARE_OFFSET;
+
+HX71x_TypeDef leftCell = { LEFT_DOUT_GPIO_Port, LEFT_DOUT_Pin, LEFT_SCK_GPIO_Port, LEFT_SCK_Pin };
+HX71x_TypeDef rightCell= { RIGHT_DOUT_GPIO_Port, RIGHT_DOUT_Pin, RIGHT_SCK_GPIO_Port, RIGHT_SCK_Pin };
+
+uint8_t SCALES_DATA[SCALES_DATA_SIZE] = { 0, 0, 0, 0, 0, 0 };
+
+// cache, this will be stored in EEPROM also
+// uint8_t CAL_DATA[CAMEL_CAL_DATA_SIZE];
+CalibrationEntry_TypeDef CAL_DATA[CAL_DATA_MAX_COUNT];
+DeviceConfiguration_TypeDef SCALES_CONFIG = { 0x33, 0, 0, 1, 0xFF };
+
+typedef struct {
+  uint8_t leftValue;
+  uint8_t rightValue;
+} CellReadValue_TypeDef;
+
+void HX71x_init() {
+  SCALES_CONFIG.config.value = 0x33;
+  SCALES_CONFIG.count = 0;
+  SCALES_CONFIG.mode = 0;
+  SCALES_CONFIG.prog = 4; // 256 gain/10Hz
+}
+
+void HX71x_readConfig(void) {
+  // 1st byte stores cells configuration, 2nd byte is calibration data point count sent by host
+  // we should keep the count and send it back when requested.
+  // we store also a CRC to validate EEPROM DATA
+  uint8_t config[4] = {0 , 0, 0, 0};
+  SCALES_CONFIG = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START);
+  CAL_COUNT = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START+1);
+  READ_VALUE_MODE = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START+2);
+  uint8_t scrc = eeprom_read_byte(CAMEL_CONFIG_EEPROM_START+3);
+  config[0] = SCALES_CONFIG;
+  config[1] = CAL_COUNT;
+  config[2] = READ_VALUE_MODE;
+
+  uint8_t crc = GENCRC(config, 3);
+  if ( crc != scrc ) {
+    // wrong CRC
+    // load default value
+    SCALES_CONFIG = DEFAULT_CONFIG;
+    CAL_COUNT = 0;
+    READ_VALUE_MODE = 0;
+  }
+  if ( CAL_COUNT > CAMEL_CAL_DATA_COUNT ) {
+    CAL_COUNT = CAMEL_CAL_DATA_COUNT;
+  }
+  if ( READ_VALUE_MODE > 2 ) {
+    READ_VALUE_MODE = 0;
+  }
+  TARE_TIMES = 0;
+  LEFT_CAL_TIMES = 0;
+  RIGHT_CAL_TIMES = 0;
+  LEFT_TARE_OFFSET = 0;
+  RIGHT_TARE_OFFSET = 0;
+
+  FUNC_FLAG = CONFIG_MASK;
+
+
+  // EEPROM_DATA is a shadow in SRAM of EEPROM calibration data as EEPROM NVM is slower to read and write
+  // no check is done on data, the host should do the checking as format is host specific
+  // memcpy(EEPROM_DATA, (const void*) (DATA_EEPROM_BASE + CAMEL_EEPROM_START), EEPROM_DATA_SIZE);
+  // copy only valid data
+  if ( CAL_COUNT > 0 && CAL_COUNT < CAMEL_CAL_DATA_COUNT ) {
+    for(size_t i=0; i<CAL_COUNT; i++) {
+      uint32_t offset = i << 3; // i * 8
+      uint32_t value = eeprom_read_word(CAMEL_LEFT_EEPROM_START + offset);
+      // memcpy(CAL_DATA + offset, &value, 4);
+      * (uint32_t *) (CAL_DATA + offset) = value;
+      value = eeprom_read_word(CAMEL_LEFT_EEPROM_START + offset + 4);
+      // memcpy(CAL_DATA + offset + 4, &value, 4);
+      * (uint32_t *)(CAL_DATA + offset + 4) = value;
+      value = eeprom_read_word(CAMEL_RIGHT_EEPROM_START + offset);
+      // memcpy(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + offset, &value, 4);
+      * (uint32_t *)(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + offset) = value;
+      value = eeprom_read_word(CAMEL_RIGHT_EEPROM_START + offset + 4);
+      // memcpy(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + offset + 4, &value, 4);
+      * (uint32_t *)(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + offset + 4) = value;
+    }
+  }
+}
 
 // reads one byte from both left and right HX711s
-uint16_t shiftIn(HX71x_TypeDef *lcell, HX71x_TypeDef *rcell) {
+CellReadValue_TypeDef shiftIn() {
   uint16_t lvalue = 0;
   uint16_t rvalue = 0;
+  CellReadValue_TypeDef result;
   uint8_t i;
 
   for (i = 0; i < 8; ++i) {
@@ -53,35 +133,38 @@ uint16_t shiftIn(HX71x_TypeDef *lcell, HX71x_TypeDef *rcell) {
     // At 32MHz MCU clock, we need at least 4 clock cycles to meet minimum value required by HX711 (0.1us)
     // for rising edge to value sampling
     // asm("NOP\n\tNOP\n\tNOP\n\tNOP");
-    if (lcell->enabled) {
-      HAL_GPIO_WritePin(lcell->SCK_Port, lcell->SCK_Pin, GPIO_PIN_SET);
+    if (SCALES_CONFIG.config.V.leftEnable ) {
+      HAL_GPIO_WritePin(leftCell.SCK_Port, leftCell.SCK_Pin, GPIO_PIN_SET);
     }
-    if (rcell->enabled) {
-      HAL_GPIO_WritePin(rcell->SCK_Port, rcell->SCK_Pin, GPIO_PIN_SET);
+    if (SCALES_CONFIG.config.V.rightEnable) {
+      HAL_GPIO_WritePin(rightCell.SCK_Port, rightCell.SCK_Pin, GPIO_PIN_SET);
     }
     asm("NOP\n\tNOP\n\tNOP\n\tNOP\n\tNOP\n\tNOP");
-    if (lcell->enabled) {
-      lvalue |= HAL_GPIO_ReadPin(lcell->DOUT_Port, lcell->DOUT_Pin) << (7 - i);
+    if (SCALES_CONFIG.config.V.leftEnable) {
+      lvalue |= HAL_GPIO_ReadPin(leftCell.DOUT_Port, leftCell.DOUT_Pin) << (7 - i);
     }
-    if (rcell->enabled) {
-      rvalue |= HAL_GPIO_ReadPin(rcell->DOUT_Port, rcell->DOUT_Pin) << (7 - i);
+    if (SCALES_CONFIG.config.V.rightEnable) {
+      rvalue |= HAL_GPIO_ReadPin(rightCell.DOUT_Port, rightCell.DOUT_Pin) << (7 - i);
     }
     // asm("NOP\n\tNOP\n\tNOP\n\tNOP");
-    if (lcell->enabled) {
-      HAL_GPIO_WritePin(lcell->SCK_Port, lcell->SCK_Pin, GPIO_PIN_RESET);
+    if (SCALES_CONFIG.config.V.leftEnable) {
+      HAL_GPIO_WritePin(leftCell.SCK_Port, leftCell.SCK_Pin, GPIO_PIN_RESET);
     }
-    if (rcell->enabled) {
-      HAL_GPIO_WritePin(rcell->SCK_Port, rcell->SCK_Pin, GPIO_PIN_RESET);
+    if (SCALES_CONFIG.config.V.rightEnable ) {
+      HAL_GPIO_WritePin(rightCell.SCK_Port, rightCell.SCK_Pin, GPIO_PIN_RESET);
     }
     asm("NOP\n\tNOP\n\tNOP\n\tNOP\n\tNOP\n\tNOP");
   }
+  // TODO: return a struct for easy result handling
   // left value in MSB
-  return (lvalue << 8) | rvalue;
+  result.leftValue = lvalue;
+  result.rightValue = rvalue;
+  return result;
 }
 
 void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 	// cells should be in ready state if enabled
-	uint16_t data[3] = {0, 0, 0};
+	CellReadValue_TypeDef data[3] = { {0,0}, {0,0}, {0,0} };
 
 	// as long as interrupts don't take longer than 60us, interrupts can be enabled
 	// disable interrupts
@@ -124,15 +207,20 @@ void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 	// enable interrupts
 	// interrupts();
 
+	// TODO: use a proper structure to store SCALES_DATA and CAL_DATA
+	// so we don't have to do this byte juggling
+	// also store left and right values continuously for each calibration point
+	// rather than first all lefts and then all rights
+
 	// copy raw data to global buffer
 	// left
-	SCALES_DATA[0] = (data[0] >> 8) & 0xFF;
-	SCALES_DATA[1] = (data[1] >> 8) & 0xFF;
-	SCALES_DATA[2] = (data[2] >> 8) & 0xFF;
+	SCALES_DATA[0] = data[0].leftValue;
+	SCALES_DATA[1] = data[1].leftValue;
+	SCALES_DATA[2] = data[2].leftValue;
 	// right
-	SCALES_DATA[3] = data[0] & 0xFF;
-	SCALES_DATA[4] = data[1] & 0xFF;
-	SCALES_DATA[5] = data[2] & 0xFF;
+	SCALES_DATA[3] = data[0].rightValue;
+	SCALES_DATA[4] = data[1].rightValue;
+	SCALES_DATA[5] = data[2].rightValue;
 
 	// compute the scaled calibrated value
 	float lvalue = 0.0;
@@ -178,43 +266,70 @@ void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 #ifdef CAMEL_LOCAL_CALIBRATION
 		// compute new left scale factor if in calibration mode
 		if ( LEFT_CAL_TIMES > 0 ) {
-
+		  // this is wrong if LEFT_CAL_INDEX == 0, this is the first value
+		  // so we should not look at the previous value
+		  // we may have garbage in CAL_DATA to start with
 			float scale = leftScale;
-			if ( CAL_OFFSET == 0 ) {
-				scale = LEFT_CAL_VALUE / (value - LEFT_TARE_OFFSET);
-			} else {
-				// get the current raw value
-				long cvalue = CAL_DATA[CAL_OFFSET + 4]
-						| (CAL_DATA[CAL_OFFSET + 5] << 8)
-						| (CAL_DATA[CAL_OFFSET + 6] << 16);
-				if ( (cvalue & 0x00800000) != 0 ) {
-					cvalue |= 0xFF000000;
-				}
-				// get the index - 1 (previous) raw value
-				long pvalue = CAL_DATA[CAL_OFFSET - CAMEL_CAL_POINT_SIZE + 4]
-					|  (CAL_DATA[CAL_OFFSET - CAMEL_CAL_POINT_SIZE + 5] << 8)
-					|  (CAL_DATA[CAL_OFFSET - CAMEL_CAL_POINT_SIZE + 6] << 16) ;
-				if ( (pvalue & 0x00800000) != 0 ) {
-					pvalue |= 0xFF000000;
-				}
-				// get the index - 1 (previous) scale factor
-				float pscale = * (float *)(CAL_DATA + CAL_OFFSET - CAMEL_CAL_POINT_SIZE);
-				// memcpy(&pscale, CAL_DATA + CAL_OFFSET - CAMEL_CAL_POINT_SIZE, 4);
-				// average raw values
-				value = (cvalue + value) / 2;
-				// compute index - 1 (previous, less weight) calibrated value
-				float w0 = (pvalue - LEFT_TARE_OFFSET) * pscale;
-				// finally, compute the current scale value,
-				// which is the slope of the line segment from previous calibration point to current point
-				scale = (LEFT_CAL_VALUE - w0) / (value - pvalue);
+
+			if ( LEFT_CAL_INDEX > 0 ) { // otherwise this is the first value
+			  long c1 = CAL_DATA[CAL_OFFSET + 4];
+			  long c2 = CAL_DATA[CAL_OFFSET + 5];
+			  c2 = c2 << 8;
+			  long c3 = CAL_DATA[CAL_OFFSET + 6];
+			  c3 = c3 << 16;
+        long cvalue = c1 | c2 | c3;
+        if ((cvalue & 0x00800000) != 0) {
+          cvalue |= 0xFF000000;
+        }
+        // average raw values by accumulating
+        value = (cvalue + value) / 2;
 			}
-			// memcpy(CAL_DATA + CAL_OFFSET, &scale, 4);
-			* (float *)(CAL_DATA + CAL_OFFSET) = scale;
-			CAL_DATA[CAL_OFFSET + 4] = value & 0xFF;
-			CAL_DATA[CAL_OFFSET + 5] = (value >> 8) & 0xFF;
-			CAL_DATA[CAL_OFFSET + 6] = (value >> 16) & 0xFF;
-			CAL_DATA[CAL_OFFSET + 7] = GENCRC(CAL_DATA + CAL_OFFSET, 7); // CRC-8
-		}
+
+      if (CAL_OFFSET == 0) {
+        // use only this value
+        if ( (value - LEFT_TARE_OFFSET) != 0 ) {
+          scale = LEFT_CAL_VALUE / (value - LEFT_TARE_OFFSET);
+        } else {
+          scale = 1;
+        }
+      } else {
+        // use this value and the previous calibration point to compute the current scale
+        // previous calibration point must be set before this
+
+        // get the index - 1 (previous) raw value
+        long p1 = CAL_DATA[CAL_OFFSET - CAMEL_CAL_POINT_SIZE + 4];
+        long p2 = CAL_DATA[CAL_OFFSET - CAMEL_CAL_POINT_SIZE + 5];
+        p2 = p2 << 8;
+        long p3 = CAL_DATA[CAL_OFFSET - CAMEL_CAL_POINT_SIZE + 6];
+        p3 = p3 << 16;
+        long pvalue = p1 | p2 | p3;
+        if ((pvalue & 0x00800000) != 0) {
+          pvalue |= 0xFF000000;
+        }
+        // get the index - 1 (previous) scale factor
+        float pscale = *(float*) (CAL_DATA + CAL_OFFSET - CAMEL_CAL_POINT_SIZE);
+        // memcpy(&pscale, CAL_DATA + CAL_OFFSET - CAMEL_CAL_POINT_SIZE, 4);
+
+        // compute index - 1 (previous, less weight) calibrated value
+        // TODO: maybe store also the original weight, so we don't have to recompute it
+        float w0 = (pvalue - LEFT_TARE_OFFSET) * pscale;
+        // finally, compute the current scale value,
+        // which is the slope of the line segment from previous calibration point to current point
+        if ( (value - pvalue) != 0 ) {
+          scale = (LEFT_CAL_VALUE - w0) / (value - pvalue);
+        } else {
+          scale = 1;
+        }
+      }
+      // TODO: rethink the calibration data storage layout to simplify handling
+      // copy to memory
+      // memcpy(CAL_DATA + CAL_OFFSET, &scale, 4);
+      *(float*) (CAL_DATA + CAL_OFFSET) = scale;
+      CAL_DATA[CAL_OFFSET + 4] = value & 0xFF;
+      CAL_DATA[CAL_OFFSET + 5] = (value >> 8) & 0xFF;
+      CAL_DATA[CAL_OFFSET + 6] = (value >> 16) & 0xFF;
+      CAL_DATA[CAL_OFFSET + 7] = GENCRC(CAL_DATA + CAL_OFFSET, 7); // CRC-8
+    }
 #endif
 	}
 	if ( rcell->enabled ) {
@@ -253,41 +368,46 @@ void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 		if (RIGHT_CAL_TIMES > 0) {
 
 			float scale = rightScale;
-			if (CAL_OFFSET == 0) {
-				scale = RIGHT_CAL_VALUE / (value - RIGHT_TARE_OFFSET);
-			} else {
-				// get the current raw value
-				long cvalue = CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 4]
-						| (CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 5] << 8)
-						| (CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 6] << 16);
-				if ((cvalue & 0x00800000) != 0) {
-					cvalue |= 0xFF000000;
-				}
-				// get the index - 1 (previous) raw value
-				long pvalue = CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET - CAMEL_CAL_POINT_SIZE + 4]
-						| (CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET - CAMEL_CAL_POINT_SIZE + 5] << 8)
-						| (CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET - CAMEL_CAL_POINT_SIZE + 6] << 16);
-				if ((pvalue & 0x00800000) != 0) {
-					pvalue |= 0xFF000000;
-				}
-				// get the index - 1 (previous) scale factor
-				float pscale = * (float *) (CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET - CAMEL_CAL_POINT_SIZE);
-				// memcpy(&pscale, CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET - CAMEL_CAL_POINT_SIZE, 4);
-				// average raw values
-				value = (cvalue + value) / 2;
-				// compute index - 1 (previous, less weight) calibrated value
-				float w0 = (pvalue - RIGHT_TARE_OFFSET) * pscale;
-				// finally, compute the current scale value,
-				// which is the slope of the line segment from previous calibration point to current point
-				scale = (RIGHT_CAL_VALUE - w0) / (value - pvalue);
+			if ( RIGHT_CAL_INDEX > 0 ) {
+        long cvalue = CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 4] | (CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 5] << 8)
+            | (CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 6] << 16);
+        if ((cvalue & 0x00800000) != 0) {
+          cvalue |= 0xFF000000;
+        }
+        // average raw values cumulatively
+        value = (value + cvalue) / 2;
 			}
-			// memcpy(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET, &scale, 4);
-			* (float *) (CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET) = scale;
-			CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 4] = value & 0xFF;
-			CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 5] = (value >> 8) & 0xFF;
-			CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 6] = (value >> 16) & 0xFF;
-			CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 7] = GENCRC(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET, 7); // CRC-8
-		}
+      if (CAL_OFFSET == 0) {
+        // there is no previous calibration point (or is zero, the tare value)
+        scale = RIGHT_CAL_VALUE / (value - RIGHT_TARE_OFFSET);
+      } else {
+        // get the index - 1 (previous) raw value
+        long pvalue = CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET - CAMEL_CAL_POINT_SIZE + 4]
+            | (CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET - CAMEL_CAL_POINT_SIZE + 5] << 8)
+            | (CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET - CAMEL_CAL_POINT_SIZE + 6] << 16);
+        if ((pvalue & 0x00800000) != 0) {
+          pvalue |= 0xFF000000;
+        }
+        // get the index - 1 (previous) scale factor
+        float pscale = *(float*) (CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET - CAMEL_CAL_POINT_SIZE);
+        // memcpy(&pscale, CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET - CAMEL_CAL_POINT_SIZE, 4);
+
+        // compute index - 1 (previous, less weight) calibrated value
+        float w0 = (pvalue - RIGHT_TARE_OFFSET) * pscale;
+        // finally, compute the current scale value,
+        // which is the slope of the line segment from previous calibration point to current point
+        scale = (RIGHT_CAL_VALUE - w0) / (value - pvalue);
+      }
+
+			// store right calibration data
+      // memcpy(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET, &scale, 4);
+      *(float*) (CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET) = scale;
+      CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 4] = value & 0xFF;
+      CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 5] = (value >> 8) & 0xFF;
+      CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 6] = (value >> 16) & 0xFF;
+      CAL_DATA[CAL_OFFSET + CAMEL_CAL_RIGHT_OFFSET + 7] = GENCRC(CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET, 7); // CRC-8
+
+    }
 #endif
 	}
 	if ( TARE_TIMES > 0 ) {
@@ -305,7 +425,8 @@ void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 			LEFT_CAL_INDEX = 0;
 			if ( lcell->enabled ) {
 				// this will store calibration data to EEPROM
-				FUNC_FLAG = LEFT_MASK;
+			  // disable this for now, handle it in the command processor
+				// FUNC_FLAG = LEFT_MASK;
 			}
 		}
 	}
@@ -316,7 +437,8 @@ void HX71x_read(HX71x_TypeDef* lcell, HX71x_TypeDef* rcell) {
 			RIGHT_CAL_INDEX = 0;
 			if ( rcell-> enabled ) {
 				// this will store calibration data to EEPROM
-				FUNC_FLAG = RIGHT_MASK;
+			  // disable this for now, handle it in the command processor
+				// FUNC_FLAG = RIGHT_MASK;
 			}
 		}
 	}

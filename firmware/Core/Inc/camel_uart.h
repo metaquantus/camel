@@ -12,8 +12,10 @@
 #define UART_TX_DATA_SIZE 80
 #define UART_RX_DATA_SIZE 80
 
-#define CMD_READY_MASK      1
-#define CMD_TARE_WAIT_MASK  0x00800000UL
+#define CMD_READY_MASK          1
+#define CMD_TARE_WAIT_MASK      0x00800000UL
+#define CMD_LEFT_CAL_WAIT_MASK  0x00400000UL
+#define CMD_RIGHT_CAL_WAIT_MASK 0x00400000UL
 
 typedef struct {
   uint8_t *buf;

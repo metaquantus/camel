@@ -7,6 +7,7 @@
 #ifdef CAMEL_UART
 #include "stm32l0xx_hal.h"
 #include "main.h"
+#include "eeprom.h"
 #include "camel_uart.h"
 #include "utils.h"
 #include <stdio.h>
@@ -16,6 +17,8 @@
 /* #define CAMEL_UART_TIMEOUT         150000 */
 #define CAMEL_UART_SEND_QUEUE_SIZE 16
 
+extern uint8_t CAL_DATA[CAMEL_CAL_DATA_SIZE];
+
 extern UART_HandleTypeDef huart2;
 extern DMA_HandleTypeDef hdma_usart2_tx;
 extern uint8_t FUNC_FLAG;
@@ -24,6 +27,8 @@ extern uint32_t CMD_FLAG;
 extern uint8_t SCALES_CONFIG;
 extern uint8_t TARE_TIMES;
 extern uint8_t TARE_INDEX;
+extern uint8_t CAL_COUNT;
+extern uint8_t CAL_OFFSET;
 extern uint8_t LEFT_CAL_TIMES;
 extern uint8_t LEFT_CAL_INDEX;
 extern float LEFT_CAL_VALUE;
@@ -251,6 +256,11 @@ void processCmd(void) {
   char delim[5] = " \t\r\n";
   char *token = strtok((char *)cmdBuf, delim);
   if ( !strcmp(token, "c") || !strcmp(token, "config") ) {
+    /*
+     * syntax: c <value>
+     * Configures cells, value in hex, e.g. 33
+     * If value missing, display current configuration.
+     */
     char *token2 = strtok(NULL, delim);
     if (token2 != NULL) {
       char* endptr;
@@ -288,6 +298,29 @@ void processCmd(void) {
     showVersion();
     showLinefeed();
     showPrompt();
+  } else if ( !strcmp(token, "w") ) {
+    char wbuf[64];
+    fftoa(SCALES_VALUE, wbuf, 2);
+    sprintf((char*) dataBuf, "\r\nWeight = %s", wbuf);
+    sendText(dataBuf, strlen((const char*) dataBuf));
+    showPrompt();
+  } else if ( !strcmp(token, "count") ) {
+    // calibration count
+    char *token2 = strtok(NULL, delim);
+    if (token2 != NULL) {
+      unsigned int count = atoi(token2);
+      if ( count < 0 || count > 4) {
+        count = 0;
+      }
+      sprintf((char*) dataBuf, "\r\nSetting calibration count = %d", count);
+      sendText(dataBuf, strlen((const char*) dataBuf));
+      CAL_COUNT = count;
+      // don't save it just yet
+    } else {
+      sprintf((char*) dataBuf, "\r\nCalibration count = %d", CAL_COUNT);
+      sendText(dataBuf, strlen((const char*) dataBuf));
+    }
+    showPrompt();
   }
   /*
   else if ( !strcmp(token, "crc") ) {
@@ -309,33 +342,80 @@ void processCmd(void) {
     }
     showPrompt();
   } */
-  /*
-  else if ( !strcmp(token, "cl")) {
+
+  else if ( !strcmp(token, "cl") || !strcmp(token, "cr")) {
+    // syntax: cl <offset> <weight> <times>
+    // e.g. cl 0 20.4 3
+    // times is optional, default to 1, if weight is missing display current calibration at offset
+    uint8_t isLeft = !strcmp(token, "cl");
+    uint8_t show = 0;
+    unsigned int offset = 0;
     char* token2 = strtok(NULL, delim);
     if ( token2 != NULL ) {
-      unsigned int offset = 0;
-      int n = sscanf(token2, "%d", &offset);
-      if ( n!= EOF ){
-        float weight = 0.0;
-        char* token3 = strtok(NULL, delim);
-        if ( token3 != NULL ) {
-          // n = sscanf(token3, "%f", &weight);
-          // weight = (float)atof(token3);
-          weight = atoff(token3);
-          uint8_t * wptr = (uint8_t *)&weight;
-          uint8_t a = * (wptr + 3);
-          uint8_t b = * (wptr + 2);
-          uint8_t c = * (wptr + 1);
-          uint8_t d = * (wptr);
-          char str[16];
-          fftoa(weight, str, 2);
-          sprintf((char*)dataBuf, "\r\nOffset = %d, FLOAT = %02X%02X%02X%02X %s %d", offset, a, b, c, d, str, (unsigned int)weight);
-          sendText(dataBuf, strlen((const char *)dataBuf));
-        }
+      offset = atoi(token2);
+      if ( offset < 0 ) {
+        offset = 0;
+      } else if ( offset > 3 ) {
+        offset = 3;
       }
+      float weight = 0.0;
+      char *token3 = strtok(NULL, delim);
+      if (token3 != NULL) {
+        // n = sscanf(token3, "%f", &weight);
+        // weight = (float)atof(token3);
+        weight = atoff(token3);
+        char *token4 = strtok(NULL, delim);
+        int times = 1;
+        if ( token4 != NULL) {
+          times = atoi(token4);
+        }
+        if ( times < 0 || times > 16) {
+          times = 3;
+        }
+        char wbuf[32];
+        fftoa(weight, wbuf, 2);
+        CAL_OFFSET = offset << 3;
+        if ( isLeft ) {
+          sprintf((char*) dataBuf, "\r\nCalibrating LEFT cell, offset=%d weight=%s", offset, wbuf);
+          LEFT_CAL_INDEX=0;
+          LEFT_CAL_VALUE=weight;
+          LEFT_CAL_TIMES=times;
+        } else {
+          sprintf((char*) dataBuf, "\r\nCalibrating RIGHT cell, offset=%d weight=%s", offset, wbuf);
+          RIGHT_CAL_INDEX=0;
+          RIGHT_CAL_VALUE=weight;
+          RIGHT_CAL_TIMES=times;
+        }
+        sendText(dataBuf, strlen((const char*) dataBuf));
+      } else {
+        show = 1;
+      }
+
+    } else {
+      show = 1;
+    }
+    if ( show ) {
+      if ( offset < 0 || offset > 3) {
+        offset = 0;
+      }
+      uint32_t calOffset = offset << 3;
+      if ( !isLeft) {
+        calOffset += CAMEL_CAL_RIGHT_OFFSET;
+      }
+      long val = CAL_DATA[calOffset + 4] | (CAL_DATA[calOffset + 5] << 8)
+          | (CAL_DATA[calOffset + 6] << 16);
+      if ((val & 0x00800000) != 0) {
+        val |= 0xFF000000;
+      }
+      // get the index - 1 (previous) scale factor
+      float scale = *(float*) (CAL_DATA + calOffset);
+      char sbuf[64];
+      fftoa(scale, sbuf, 8);
+      sprintf((char*)dataBuf, "\r\nCalibration: %s offset=%d value=%ld scale=%s", isLeft ? "LEFT" : "RIGHT", offset, val, sbuf);
+      sendText(dataBuf, strlen((const char*) dataBuf));
     }
     showPrompt();
-  }*/
+  }
   else if (!strcmp(token, "t") || !strcmp(token, "tare")) {
     char *token2 = strtok(NULL, delim);
     if (token2 == NULL) {

@@ -58,8 +58,8 @@ DMA_HandleTypeDef hdma_usart2_tx;
 DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
-HX71x_TypeDef leftCell = { LEFT_DOUT_GPIO_Port, LEFT_DOUT_Pin, LEFT_SCK_GPIO_Port, LEFT_SCK_Pin, 1, 1, 0 };
-HX71x_TypeDef rightCell= { RIGHT_DOUT_GPIO_Port, RIGHT_DOUT_Pin, RIGHT_SCK_GPIO_Port, RIGHT_SCK_Pin, 1, 1, 0 };
+extern HX71x_TypeDef leftCell;
+extern HX71x_TypeDef rightCell;
 uint8_t SCALES_DATA[SCALES_DATA_SIZE] = { 0, 0, 0, 0, 0, 0 };
 // encoded left/right cell configuration (sampling period and gain factor)
 uint8_t SCALES_CONFIG = DEFAULT_CONFIG;
@@ -596,11 +596,9 @@ void parseConfig(void) {
     // SCALES_CONFIG &= 0xFFFF;
   } else if ((FUNC_FLAG & RIGHT_MASK) != 0) {
     eeprom_write_word(CAMEL_RIGHT_EEPROM_START + CAL_OFFSET,
-        (uint32_t) *(uint32_t*) (CAL_DATA + CAMEL_CAL_RIGHT_OFFSET
-            + CAL_OFFSET));
+        (uint32_t) *(uint32_t*) (CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET));
     eeprom_write_word(CAMEL_RIGHT_EEPROM_START + CAL_OFFSET + 4,
-        (uint32_t) *(uint32_t*) (CAL_DATA + CAMEL_CAL_RIGHT_OFFSET
-            + CAL_OFFSET + 4));
+        (uint32_t) *(uint32_t*) (CAL_DATA + CAMEL_CAL_RIGHT_OFFSET + CAL_OFFSET + 4));
     // SCALES_CONFIG &= 0xFFFF;
   } else if ((FUNC_FLAG & COUNT_MASK) != 0) {
     uint8_t config[4] = { 0, 0, 0, 0 };

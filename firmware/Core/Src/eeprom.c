@@ -7,8 +7,7 @@
 
 #include <eeprom.h>
 
-// cache
-uint8_t CAL_DATA[CAMEL_CAL_DATA_SIZE];
+
 
 uint16_t eeprom_length() {
   return DATA_EEPROM_END - DATA_EEPROM_BASE + 1;
