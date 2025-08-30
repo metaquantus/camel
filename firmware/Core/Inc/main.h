@@ -41,9 +41,7 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-#define CAMEL_VERSION "3.0"
-#define CAMEL_VERSION_STRING "\r\nCamel Dual HX712 Weigh Scales ADC\r\nVersion: 3.0"
-#define CAMEL_VERSION_STRING_LEN 49
+
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -62,56 +60,19 @@ void Error_Handler(void);
 #define CAMEL_ADDRESS 0x75
 #define LED1_Pin GPIO_PIN_14
 #define LED1_GPIO_Port GPIOC
-#define SCK1_Pin GPIO_PIN_5
-#define SCK1_GPIO_Port GPIOA
-#define DOUT1_Pin GPIO_PIN_6
+#define DOUT1_Pin GPIO_PIN_0
 #define DOUT1_GPIO_Port GPIOA
-#define DOUT2_Pin GPIO_PIN_7
+#define DOUT1_EXTI_IRQn EXTI0_1_IRQn
+#define SCK1_Pin GPIO_PIN_1
+#define SCK1_GPIO_Port GPIOA
+#define DOUT2_Pin GPIO_PIN_11
 #define DOUT2_GPIO_Port GPIOA
-#define SCK2_Pin GPIO_PIN_1
-#define SCK2_GPIO_Port GPIOB
+#define DOUT2_EXTI_IRQn EXTI4_15_IRQn
+#define SCK2_Pin GPIO_PIN_12
+#define SCK2_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
-// HX71x has 24bit resolution, times 2 cells
-// first 3 bytes for leftCell, last 3 bytes for rightCell
-#define SCALES_DATA_SIZE 6
-#define CONFIG_MASK 0x80
-// external calibration read or save values only
-#define LEFT_MASK   0x40
-#define RIGHT_MASK  0x20
-#define COUNT_MASK  0x10
-// local tare
-#define TARE_MASK   0x08
-// local calibration and save values
-#define CAL_LEFT_MASK  0x04
-#define CAL_RIGHT_MASK 0x02
 
-#ifdef CAMEL1
-#define DEFAULT_CONFIG 0x33
-#define LEFT_SCK_Pin        SCK2_Pin
-#define LEFT_SCK_GPIO_Port  SCK2_GPIO_Port
-#define LEFT_DOUT_Pin       DOUT2_Pin
-#define LEFT_DOUT_GPIO_Port DOUT2_GPIO_Port
-
-#define RIGHT_DOUT_Pin       DOUT1_Pin
-#define RIGHT_DOUT_GPIO_Port DOUT1_GPIO_Port
-#define RIGHT_SCK_Pin        SCK1_Pin
-#define RIGHT_SCK_GPIO_Port  SCK1_GPIO_Port
-
-#else
-#define DEFAULT_CONFIG 0x11
-// cells are reversed in PCB rev 2+ to optimise layout
-#define LEFT_SCK_Pin        SCK1_Pin
-#define LEFT_SCK_GPIO_Port  SCK1_GPIO_Port
-#define LEFT_DOUT_Pin       DOUT1_Pin
-#define LEFT_DOUT_GPIO_Port DOUT1_GPIO_Port
-
-#define RIGHT_DOUT_Pin       DOUT2_Pin
-#define RIGHT_DOUT_GPIO_Port DOUT2_GPIO_Port
-#define RIGHT_SCK_Pin        SCK2_Pin
-#define RIGHT_SCK_GPIO_Port  SCK2_GPIO_Port
-
-#endif
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
